@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Env / secrets — never commit
+.env
+.env.local
+.env.*.local
+**/.env
+!**/.env.example
+
+# Build / cache
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Logs & debug
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Uploads / generated
+backend/uploads/
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Coverage / test
+coverage/
+.nyc_output/
+
+# Misc
+*.pem
+.ngrok/

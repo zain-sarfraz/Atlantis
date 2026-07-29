@@ -1,0 +1,337 @@
+// Serrano Hotel — Prisma Schema
+// Database: MySQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum BedType {
+  KING
+  QUEEN
+  TWIN
+  SOFA_BED
+}
+
+enum ViewType {
+  OCEAN
+  PALM
+  GARDEN
+  CITY
+  POOL
+}
+
+enum BoardType {
+  ROOM_ONLY
+  BED_AND_BREAKFAST
+  HALF_BOARD
+  FULL_BOARD
+}
+
+enum AmenityCategory {
+  AMENITY
+  PERK
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  CHECKED_IN
+  CHECKED_OUT
+  NO_SHOW
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  RESERVATIONS_MANAGER
+  CONTENT_EDITOR
+}
+
+// ─── Room Catalog ─────────────────────────────────────────────────────────────
+
+model RoomCategory {
+  id           String     @id @default(cuid())
+  name         String     @db.VarChar(100)
+  slug         String     @unique @db.VarChar(120)
+  displayOrder Int        @default(0)
+  description  String?    @db.Text
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  rooms        RoomType[]
+}
+
+model RoomType {
+  id           String       @id @default(cuid())
+  categoryId   String
+  category     RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name         String       @db.VarChar(120)
+  slug         String       @unique @db.VarChar(140)
+  bedType      BedType
+  maxOccupancy Int
+  sizeSqm      Float
+  viewType     ViewType
+  description  String       @db.Text
+  mainImage    String?      @db.VarChar(500)
+  isActive     Boolean      @default(true)
+  displayOrder Int          @default(0)
+  /// Lodgify property ID (house) — required for channel sync
+  lodgifyPropertyId Int?
+  /// Lodgify room type ID within that property
+  lodgifyRoomTypeId Int?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  images            RoomImage[]
+  amenities         RoomAmenity[]
+  ratePlans         RatePlan[]
+  availability      Availability[]
+  bookingItems      BookingItem[]
+  promoApplications PromoCodeRoomType[]
+
+  @@index([lodgifyPropertyId])
+  @@index([lodgifyRoomTypeId])
+}
+
+model RoomImage {
+  id         String   @id @default(cuid())
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  url        String   @db.VarChar(500)
+  alt        String?  @db.VarChar(255)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model RoomAmenity {
+  id         String          @id @default(cuid())
+  roomTypeId String
+  roomType   RoomType        @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  name       String          @db.VarChar(255)
+  category   AmenityCategory @default(AMENITY)
+  sortOrder  Int             @default(0)
+}
+
+// ─── Rate Plans & Pricing ─────────────────────────────────────────────────────
+
+model RatePlan {
+  id          String    @id @default(cuid())
+  roomTypeId  String
+  roomType    RoomType  @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  name        BoardType
+  description String?   @db.VarChar(500)
+  basePrice   Float
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bookingItems   BookingItem[]
+  priceOverrides PriceOverride[]
+}
+
+// Per-date price override for a rate plan (seasonal pricing)
+model PriceOverride {
+  id         String   @id @default(cuid())
+  ratePlanId String
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+  date       DateTime @db.Date
+  price      Float
+  createdAt  DateTime @default(now())
+
+  @@unique([ratePlanId, date])
+}
+
+// ─── Inventory / Availability ─────────────────────────────────────────────────
+
+model Availability {
+  id         String   @id @default(cuid())
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  date       DateTime @db.Date
+  available  Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([roomTypeId, date])
+}
+
+// ─── Promo Codes ──────────────────────────────────────────────────────────────
+
+model PromoCode {
+  id              String       @id @default(cuid())
+  code            String       @unique @db.VarChar(50)
+  description     String?      @db.VarChar(500)
+  discountType    DiscountType
+  discountValue   Float
+  validFrom       DateTime?
+  validTo         DateTime?
+  maxUses         Int?
+  usedCount       Int          @default(0)
+  isActive        Boolean      @default(true)
+  applicableToAll Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  roomTypes PromoCodeRoomType[]
+  bookings  Booking[]
+}
+
+model PromoCodeRoomType {
+  promoCodeId String
+  roomTypeId  String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  roomType    RoomType  @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@id([promoCodeId, roomTypeId])
+}
+
+// ─── Guests ───────────────────────────────────────────────────────────────────
+
+model Guest {
+  id         String    @id @default(cuid())
+  email      String    @unique @db.VarChar(255)
+  password   String?   @db.VarChar(255)
+  firstName  String    @db.VarChar(100)
+  lastName   String    @db.VarChar(100)
+  prefix     String?   @db.VarChar(10)
+  phone      String?   @db.VarChar(30)
+  country    String?   @db.VarChar(5)
+  city       String?   @db.VarChar(100)
+  newsletter Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  bookings   Booking[]
+}
+
+// ─── Bookings ─────────────────────────────────────────────────────────────────
+
+model Booking {
+  id              String        @id @default(cuid())
+  bookingRef      String        @unique @db.VarChar(20)
+  guestId         String?
+  guest           Guest?        @relation(fields: [guestId], references: [id])
+  promoCodeId     String?
+  promoCode       PromoCode?    @relation(fields: [promoCodeId], references: [id])
+  currency        String        @default("AED") @db.VarChar(5)
+  status          BookingStatus @default(PENDING)
+  totalAmount     Float
+  specialRequests String?       @db.Text
+  checkIn         DateTime      @db.Date
+  checkOut        DateTime      @db.Date
+  adults          Int           @default(1)
+  children        Int           @default(0)
+  roomsCount      Int           @default(1)
+  guestPrefix     String?       @db.VarChar(10)
+  firstName       String        @db.VarChar(100)
+  lastName        String        @db.VarChar(100)
+  email           String        @db.VarChar(255)
+  phone           String        @db.VarChar(30)
+  country         String?       @db.VarChar(5)
+  city            String?       @db.VarChar(100)
+  zipCode         String?       @db.VarChar(20)
+  newsletter      Boolean       @default(false)
+  /// Lodgify reservation ID — set when pushed to or synced from Lodgify
+  lodgifyBookingId String?      @unique @db.VarChar(50)
+  /// Channel source when synced from Lodgify (e.g. Airbnb, Booking.com, Direct)
+  lodgifySource   String?       @db.VarChar(100)
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  items BookingItem[]
+}
+
+model BookingItem {
+  id              String   @id @default(cuid())
+  bookingId       String
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  roomTypeId      String
+  roomType        RoomType @relation(fields: [roomTypeId], references: [id])
+  ratePlanId      String
+  ratePlan        RatePlan @relation(fields: [ratePlanId], references: [id])
+  nightlyRate     Float
+  nights          Int
+  subtotal        Float
+  serviceCharge   Float
+  municipalityFee Float
+  vat             Float
+  total           Float
+  createdAt       DateTime @default(now())
+}
+
+// ─── Currency ─────────────────────────────────────────────────────────────────
+
+model CurrencyRate {
+  id           String   @id @default(cuid())
+  fromCurrency String   @db.VarChar(5)
+  toCurrency   String   @db.VarChar(5)
+  rate         Float
+  lastUpdated  DateTime @default(now())
+
+  @@unique([fromCurrency, toCurrency])
+}
+
+// ─── Admin Users ──────────────────────────────────────────────────────────────
+
+model AdminUser {
+  id         String    @id @default(cuid())
+  email      String    @unique @db.VarChar(255)
+  password   String    @db.VarChar(255)
+  firstName  String    @db.VarChar(100)
+  lastName   String    @db.VarChar(100)
+  role       AdminRole @default(CONTENT_EDITOR)
+  isActive   Boolean   @default(true)
+  lastLogin  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+// ─── Hotel Alerts (Announcements) ─────────────────────────────────────────────
+
+model HotelAlert {
+  id        String   @id @default(cuid())
+  title     String   @db.VarChar(255)
+  message   String   @db.Text
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Lodgify webhook inbox (any property/room — no local mapping required) ────
+
+model LodgifyBooking {
+  id          String   @id @default(cuid())
+  /// Lodgify booking id when present (best-effort)
+  bookingId   String?  @db.VarChar(50)
+  propertyId  Int?
+  roomId      Int?
+  guestName   String?  @db.VarChar(255)
+  guestEmail  String?  @db.VarChar(255)
+  arrival     DateTime? @db.Date
+  departure   DateTime? @db.Date
+  status      String?  @db.VarChar(50)
+  action      String?  @db.VarChar(80)
+  source      String?  @db.VarChar(100)
+  /// Full webhook JSON payload as received
+  rawPayload  Json
+  receivedAt  DateTime @default(now())
+
+  @@index([bookingId])
+  @@index([propertyId])
+  @@index([status])
+  @@index([receivedAt])
+}

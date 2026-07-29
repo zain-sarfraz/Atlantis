@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@source "../../admin/src/**/*.{js,ts,jsx,tsx}";
+
+@theme {
+  /* Limiria Villa — cream, sand taupe, warm earth */
+  --color-sand: #bca37f;
+  --color-sand-dark: #a89068;
+  --color-sand-light: #e8dfd0;
+  --color-navy: #5e544b;
+  --color-charcoal: #4a4238;
+  --color-cream: #faf7f2;
+  --color-cream-dark: #f2ede4;
+  --color-ink: #5e544b;
+  --color-taupe: #8c8279;
+  --color-muted: #8c8279;
+  --color-border: #d6d0c7;
+  --color-slate-500: #8c8279;
+  --color-slate-600: #6b635a;
+  --color-brand: #bca37f;
+
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --font-serif: "Manrope", system-ui, sans-serif;
+}
+
+:root {
+  --primary: #bca37f;
+  --navy: #5e544b;
+  --charcoal: #4a4238;
+  --ink: #5e544b;
+  --bg: #faf7f2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.625;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100svh;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  text-align: left;
+  border: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-sans);
+  color: var(--navy);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+p {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid #bca37f;
+  outline-offset: 2px;
+}
+
+.drawer-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.drawer-scroll::-webkit-scrollbar-thumb {
+  background: #bca37f;
+  border-radius: 3px;
+}
+
+.type-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8c8279;
+}
+
+.type-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #5e544b;
+}
