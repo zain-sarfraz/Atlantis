@@ -10,7 +10,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@admin': path.resolve(root, '../admin/src'),
+      '@admin': path.resolve(root, 'src/admin'),
       // Single React copy when importing admin sources (admin has React 18)
       react: nm('react'),
       'react-dom': nm('react-dom'),

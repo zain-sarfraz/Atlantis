@@ -83,9 +83,10 @@ type Action =
   | { type: 'SET_CART_ERROR'; error: string }
   | { type: 'SET_HOTEL_ALERTS'; alerts: Array<{ id: string; title: string; message: string }> }
 
-const today = new Date(2026, 6, 22)
-const defaultCheckIn = new Date(2026, 6, 24)
-const defaultCheckOut = new Date(2026, 6, 27)
+const today = new Date(2026, 7, 10) // Aug 10, 2026
+/** First open Limiria night from Lodgify availability */
+const defaultCheckIn = new Date(2026, 7, 18) // Aug 18
+const defaultCheckOut = new Date(2026, 7, 20) // Aug 20
 
 function mapCategories(apiCats: ApiRoomCategory[]): RoomCategory[] {
   return apiCats
@@ -102,10 +103,11 @@ function mapCategories(apiCats: ApiRoomCategory[]): RoomCategory[] {
           maxOccupancy: room.maxOccupancy,
           sizeSqm: room.sizeSqm,
           description: room.description,
-          image: room.image || '/rooms/room-1.jpg',
-          gallery: room.gallery?.length ? room.gallery : [room.image || '/rooms/room-1.jpg'],
+          image: room.image || '/villa/villa-pool.png',
+          gallery: room.gallery?.length ? room.gallery : [room.image || '/villa/villa-pool.png'],
           amenities: room.amenities ?? [],
           perks: room.perks ?? [],
+          available: room.available !== false,
           ratePlans: room.ratePlans.map((p) => ({
             id: p.id,
             name: p.name,
@@ -363,7 +365,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         checkOut: toISODate(state.checkOut),
         adults: state.guests.adults,
         children: state.guests.children,
-        rooms: state.guests.rooms,
+        rooms: 1,
         currency: state.currency,
         promoCode: state.promoCode || undefined,
       })
@@ -375,7 +377,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         if (seq !== searchSeq.current) return
         dispatch({
           type: 'SET_SEARCH_ERROR',
-          error: (err as Error).message || 'Failed to load rooms',
+          error: (err as Error).message || 'Failed to load villa availability',
         })
       })
   }, [
@@ -385,7 +387,6 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     state.currency,
     state.guests.adults,
     state.guests.children,
-    state.guests.rooms,
     state.promoCode,
   ])
 
@@ -410,7 +411,8 @@ export function BookingProvider({ children }: { children: ReactNode }) {
       state,
       nights,
       today,
-      setGuests: (g) => dispatch({ type: 'SET_GUESTS', guests: g }),
+      setGuests: (g) =>
+        dispatch({ type: 'SET_GUESTS', guests: { ...g, rooms: 1 } }),
       setDates: (checkIn, checkOut) =>
         dispatch({ type: 'SET_DATES', checkIn, checkOut }),
       setPromo: (code) => dispatch({ type: 'SET_PROMO', code }),

@@ -43,7 +43,9 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 const GUEST_TOKEN_KEY = 'serrano_guest_token'
 const GUEST_USER_KEY = 'serrano_guest_user'
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+/** Origin only — empty uses Vite proxy `/api` */
+const API_ORIGIN = String(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const BASE = API_ORIGIN ? `${API_ORIGIN}/api` : '/api'
 
 async function apiPostRaw(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const res = await fetch(`${BASE}${path}`, {

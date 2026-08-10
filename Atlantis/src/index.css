@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../admin/src/**/*.{js,ts,jsx,tsx}";
+@source "./admin/**/*.{js,ts,jsx,tsx}";
 
 @theme {
   /* Limiria Villa — cream, sand taupe, warm earth */

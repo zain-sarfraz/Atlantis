@@ -28,7 +28,7 @@ export default function RateListView({ categories }: RateListViewProps) {
   >({})
 
   const groups = useMemo(() => {
-    const map = new Map<BoardType, RateEntry[]>()
+    const map = new Map<string, RateEntry[]>()
 
     for (const category of categories) {
       for (const room of category.rooms) {

@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
-import RoomsPage from './pages/RoomsPage'
 import BookingsPage from './pages/BookingsPage'
 import BookingDetailPage from './pages/BookingDetailPage'
 import PromoCodesPage from './pages/PromoCodesPage'
@@ -33,7 +32,7 @@ function AdminRoutes() {
       >
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="rooms" element={<RoomsPage />} />
+        <Route path="rooms" element={<Navigate to="/admin/availability" replace />} />
         <Route path="availability" element={<AvailabilityPage />} />
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="bookings/:id" element={<BookingDetailPage />} />

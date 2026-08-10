@@ -46,7 +46,8 @@ export function generateBookingRef(): string {
 }
 
 export function parseDate(dateStr: string): Date {
-  const d = new Date(dateStr)
+  const iso = dateStr.includes('T') ? dateStr : `${dateStr.slice(0, 10)}T00:00:00.000Z`
+  const d = new Date(iso)
   if (isNaN(d.getTime())) throw new Error(`Invalid date: ${dateStr}`)
   d.setUTCHours(0, 0, 0, 0)
   return d

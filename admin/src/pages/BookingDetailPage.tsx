@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { bookingsApi, type Booking } from '../api/client'
+import { bookingsApi, assetUrl, type Booking } from '../api/client'
 import PageHeader from '../components/PageHeader'
 import Badge from '../components/Badge'
 import { ArrowLeft } from 'lucide-react'
@@ -99,7 +99,7 @@ export default function BookingDetailPage() {
               <div key={item.id} className="flex gap-4 rounded-lg border border-slate-100 p-4">
                 {(item.roomType.images?.[0]?.url || item.roomType.mainImage) && (
                   <img
-                    src={item.roomType.images?.[0]?.url || item.roomType.mainImage}
+                    src={assetUrl(item.roomType.images?.[0]?.url || item.roomType.mainImage)}
                     alt={item.roomType.name}
                     className="h-24 w-32 rounded-lg object-cover shrink-0"
                   />

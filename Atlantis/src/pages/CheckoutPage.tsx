@@ -71,7 +71,7 @@ export default function CheckoutPage() {
         checkOut: first.checkOut,
         adults: state.guests.adults,
         children: state.guests.children,
-        roomsCount: state.guests.rooms,
+        roomsCount: 1,
         currency: state.currency,
         promoCode: state.promoCode || undefined,
         items: state.cart.map((item) => ({
@@ -146,13 +146,13 @@ export default function CheckoutPage() {
                 Your cart is empty
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Select a room rate before checking out.
+                Select a villa rate before checking out.
               </p>
               <Link
                 to="/"
                 className="mt-6 inline-block rounded-lg bg-sand px-6 py-3 text-sm font-medium uppercase tracking-wide text-navy focus:ring-2 focus:ring-navy"
               >
-                Select a Room
+                Select Your Villa
               </Link>
             </div>
           ) : (
@@ -174,7 +174,7 @@ export default function CheckoutPage() {
                         className="h-28 w-full rounded-lg object-cover sm:h-24 sm:w-32 sm:shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="type-label text-brand">{item.categoryName}</p>
+                        <p className="type-label text-brand">Villa</p>
                         <p className="text-lg font-semibold text-navy">
                           {item.roomName}
                         </p>
@@ -454,10 +454,11 @@ export default function CheckoutPage() {
                     <p>Check-in after 3:00 pm</p>
                     <p>Check-out before 12:00 pm</p>
                   </div>
-                  {state.cart.map((item, i) => (
+                  {state.cart.map((item) => (
                     <div key={item.id} className="mt-4">
                       <p className="type-label text-navy">
-                        Room {i + 1} {item.categoryName}, {item.roomName}
+                        {item.roomName}
+                        {item.ratePlanName ? ` · ${item.ratePlanName}` : ''}
                       </p>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
                         A deposit is not required as long as a valid credit card

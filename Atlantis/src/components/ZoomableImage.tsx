@@ -31,6 +31,7 @@ export default function ZoomableImage({
           alt={alt}
           className="block h-full w-full object-cover object-center"
           loading={loading}
+          referrerPolicy="no-referrer"
         />
       </button>
       {open && (

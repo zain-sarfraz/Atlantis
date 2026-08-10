@@ -75,7 +75,8 @@ export async function getPropertyById(propertyId: number | string): Promise<unkn
 
 /**
  * GET /v2/availability/:propertyId
- * Optional startDate/endDate map to `from` / `to` query params.
+ * Lodgify accepts Start/End (required for real calendar periods).
+ * from/to alone often returns a dummy 0001-01-01 period.
  */
 export async function getAvailability(
   propertyId: number | string,
@@ -86,8 +87,9 @@ export async function getAvailability(
   try {
     const { data } = await lodgifyClient.get(`/availability/${propertyId}`, {
       params: {
-        ...(startDate ? { from: startDate } : {}),
-        ...(endDate ? { to: endDate } : {}),
+        ...(startDate
+          ? { Start: startDate, End: endDate, from: startDate, to: endDate }
+          : {}),
       },
     })
     return data
@@ -147,7 +149,7 @@ export async function createBookingInLodgify(
     arrival: bookingData.arrival,
     departure: bookingData.departure,
     status: statusMap[bookingData.status ?? 'booked'] ?? 'Booked',
-    source_text: bookingData.source ?? 'Direct Website',
+    source_text: bookingData.source ?? 'Websites',
     guest: {
       guest_name: { first_name: firstName, last_name: lastName },
       email: bookingData.guestEmail ?? null,
@@ -235,27 +237,49 @@ export async function getBookings(
         : items
     }
 
-    // Otherwise page through Upcoming + Current for a fuller sync window
-    for (const stayFilter of ['Upcoming', 'Current'] as const) {
-      page = 1
-      for (;;) {
-        const { data } = await lodgifyClient.get('/reservations/bookings', {
-          params: {
-            page,
-            size,
-            includeCount: true,
-            stayFilter,
-            ...(propertyId != null ? { propertyId } : {}),
-            ...(options?.updatedSince ? { updatedSince: options.updatedSince } : {}),
-          },
-        })
-        const items = normalizeBookingList(data)
-        all.push(...items)
-        if (items.length < size) break
-        page += 1
-        if (page > 40) break // safety cap
+    // Otherwise page through bookings. If caller requests 'All', fetch every page for 'All'.
+      if (options?.stayFilter === 'All') {
+        page = 1
+        for (;;) {
+          const { data } = await lodgifyClient.get('/reservations/bookings', {
+            params: {
+              page,
+              size,
+              includeCount: true,
+              stayFilter: 'All',
+              ...(propertyId != null ? { propertyId } : {}),
+              ...(options?.updatedSince ? { updatedSince: options.updatedSince } : {}),
+            },
+          })
+          const items = normalizeBookingList(data)
+          all.push(...items)
+          if (items.length < size) break
+          page += 1
+          if (page > 200) break // safety cap for large properties
+        }
+      } else {
+        // Default: Upcoming + Current (keeps previous behaviour)
+        for (const stayFilter of ['Upcoming', 'Current'] as const) {
+          page = 1
+          for (;;) {
+            const { data } = await lodgifyClient.get('/reservations/bookings', {
+              params: {
+                page,
+                size,
+                includeCount: true,
+                stayFilter,
+                ...(propertyId != null ? { propertyId } : {}),
+                ...(options?.updatedSince ? { updatedSince: options.updatedSince } : {}),
+              },
+            })
+            const items = normalizeBookingList(data)
+            all.push(...items)
+            if (items.length < size) break
+            page += 1
+            if (page > 40) break // safety cap
+          }
+        }
       }
-    }
 
     const filtered =
       propertyId != null
@@ -339,4 +363,33 @@ export function extractBookingStatus(booking: unknown): string {
   if (!booking || typeof booking !== 'object') return ''
   const b = booking as Record<string, unknown>
   return String(b.status ?? b.booking_status ?? '').toLowerCase()
+}
+
+function parseNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string') return 0
+  const normalized = value.trim().replace(/[,\s]/g, '').replace(/[^0-9.\-]/g, '')
+  if (!normalized) return 0
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : 0
+}
+
+export function extractBookingAmount(booking: unknown): number {
+  if (!booking || typeof booking !== 'object') return 0
+  const b = booking as Record<string, unknown>
+  const value =
+    b.booking_total_amount ??
+    b.bookingTotalAmount ??
+    b.booking_amount ??
+    b.bookingAmount ??
+    b.total_amount ??
+    b.totalAmount ??
+    b.amount ??
+    b.total ??
+    b.gross_amount ??
+    b.grossAmount ??
+    b.amount_paid ??
+    b.amountPaid
+
+  return parseNumber(value)
 }

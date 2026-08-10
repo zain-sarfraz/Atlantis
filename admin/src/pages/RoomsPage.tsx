@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { roomsApi, type RoomCategory, type RoomType, type RatePlan } from '../api/client'
+import { roomsApi, assetUrl, type RoomCategory, type RoomType, type RatePlan } from '../api/client'
 import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
@@ -564,7 +564,7 @@ export default function RoomsPage() {
                       <div className="flex items-center gap-4 px-6 py-4">
                         {room.mainImage && (
                           <img
-                            src={room.mainImage}
+                            src={assetUrl(room.mainImage)}
                             alt={room.name}
                             className="h-14 w-20 shrink-0 rounded-lg border border-slate-100 object-cover"
                           />

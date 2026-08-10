@@ -1,27 +1,28 @@
 import { useState, useRef, useEffect } from 'react'
-import { Bell, ShoppingBag, User, LogOut, ChevronDown } from 'lucide-react'
+import { ShoppingBag, User, LogOut, ChevronDown } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useBooking } from '../context/BookingContext'
 import { useAuth } from '../context/AuthContext'
 import type { Currency } from '../types'
 import Logo from './Logo'
+import AlertsDropdown from './AlertsDropdown'
 
 const currencies: Currency[] = ['AED', 'USD', 'EUR', 'GBP']
 
 export default function Navbar() {
-  const { state, cartCount, setCurrency, toggleCart, toggleAlerts } = useBooking()
+  const { state, cartCount, setCurrency, toggleCart } = useBooking()
   const { user, admin, role, logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const activeAlerts = state.hotelAlerts.filter((a) => !state.alertsDismissed.includes(a.id))
   const isLoggedIn = role === 'guest' || role === 'admin'
-  const displayName = role === 'admin' && admin
-    ? { first: admin.firstName, last: admin.lastName, email: admin.email }
-    : user
-      ? { first: user.firstName, last: user.lastName, email: user.email }
-      : null
+  const displayName =
+    role === 'admin' && admin
+      ? { first: admin.firstName, last: admin.lastName, email: admin.email }
+      : user
+        ? { first: user.firstName, last: user.lastName, email: user.email }
+        : null
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -52,23 +53,13 @@ export default function Navbar() {
             aria-label="Currency"
           >
             {currencies.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
 
-          <button
-            type="button"
-            onClick={() => toggleAlerts()}
-            className="relative rounded-lg p-2 text-taupe transition hover:bg-cream-dark hover:text-ink focus:ring-2 focus:ring-sand"
-            aria-label="Alerts"
-          >
-            <Bell size={20} />
-            {activeAlerts.length > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-sand px-1 text-xs font-semibold text-navy">
-                {activeAlerts.length}
-              </span>
-            )}
-          </button>
+          <AlertsDropdown />
 
           <button
             type="button"
@@ -77,40 +68,46 @@ export default function Navbar() {
             aria-label="Cart"
           >
             <ShoppingBag size={20} />
-            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-sand px-1 text-xs font-semibold text-navy">
+            <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-sand px-1 text-xs font-semibold text-navy">
               {cartCount}
             </span>
           </button>
 
-          {/* User / Auth */}
           {isLoggedIn && displayName ? (
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
-                onClick={() => setMenuOpen(o => !o)}
+                onClick={() => setMenuOpen((o) => !o)}
                 className="flex items-center gap-1.5 rounded-lg border border-border bg-cream px-3 py-1.5 text-sm text-ink transition hover:bg-cream-dark focus:ring-2 focus:ring-sand"
               >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sand text-navy text-xs font-semibold">
-                  {displayName.first[0]}{displayName.last[0]}
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sand text-xs font-semibold text-navy">
+                  {displayName.first[0]}
+                  {displayName.last[0]}
                 </span>
-                <span className="hidden sm:block max-w-[100px] truncate font-medium">{displayName.first}</span>
+                <span className="hidden max-w-[100px] truncate font-medium sm:block">
+                  {displayName.first}
+                </span>
                 <ChevronDown size={14} className="text-taupe" />
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-border bg-white shadow-lg overflow-hidden z-50">
-                  <div className="px-4 py-3 border-b border-border">
-                    <p className="text-sm font-semibold text-ink truncate">{displayName.first} {displayName.last}</p>
-                    <p className="text-xs text-taupe truncate">{displayName.email}</p>
+                <div className="absolute top-full right-0 z-50 mt-2 w-52 overflow-hidden rounded-xl border border-border bg-white shadow-lg">
+                  <div className="border-b border-border px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {displayName.first} {displayName.last}
+                    </p>
+                    <p className="truncate text-xs text-taupe">{displayName.email}</p>
                     {role === 'admin' && (
-                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Admin</p>
+                      <p className="mt-1 text-[10px] font-semibold tracking-wide text-amber-700 uppercase">
+                        Admin
+                      </p>
                     )}
                   </div>
                   {role === 'admin' ? (
                     <Link
                       to="/admin/dashboard"
                       onClick={() => setMenuOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-cream transition"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink transition hover:bg-cream"
                     >
                       <User size={15} className="text-taupe" />
                       Admin Dashboard
@@ -119,7 +116,7 @@ export default function Navbar() {
                     <Link
                       to="/bookings"
                       onClick={() => setMenuOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-cream transition"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink transition hover:bg-cream"
                     >
                       <User size={15} className="text-taupe" />
                       My Bookings
@@ -128,7 +125,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50"
                   >
                     <LogOut size={15} />
                     Sign Out

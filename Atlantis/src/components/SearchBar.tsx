@@ -126,8 +126,7 @@ export default function SearchBar() {
                 <div className="truncate text-base leading-snug text-navy">
                   {state.guests.adults + state.guests.children} guest
                   {state.guests.adults + state.guests.children !== 1 ? 's' : ''}
-                  , {state.guests.rooms} room
-                  {state.guests.rooms !== 1 ? 's' : ''}
+                  , 1 villa
                 </div>
               </div>
               <ChevronDown
@@ -184,12 +183,6 @@ export default function SearchBar() {
                     ))}
                   </div>
                 )}
-                <Stepper
-                  label="Rooms"
-                  value={state.guests.rooms}
-                  min={1}
-                  onChange={(n) => setGuests({ rooms: n })}
-                />
                 <button
                   type="button"
                   onClick={() => setGuestsOpen(false)}

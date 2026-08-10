@@ -32,7 +32,7 @@ export default function CartSidebar() {
       {cartCount === 0 ? (
         onCheckout ? (
           <p className="p-4 text-sm text-slate-500">
-            No rooms selected yet. Go back and book a room to see it here.
+            No villa selected yet. Go back and choose a rate to see it here.
           </p>
         ) : null
       ) : (
@@ -51,7 +51,7 @@ export default function CartSidebar() {
                       className="h-16 w-16 shrink-0 rounded object-cover"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="type-label text-brand">{item.categoryName}</p>
+                      <p className="type-label text-brand">Villa</p>
                       <p className="truncate text-base font-semibold text-navy">
                         {item.roomName}
                       </p>

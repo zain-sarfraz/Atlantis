@@ -26,7 +26,7 @@ export default function BookingSummary() {
 
   if (!pending) return null
 
-  const { room, categoryName, ratePlan } = pending
+  const { room, ratePlan } = pending
   const n = nights || 1
   const breakdown = computeBreakdown(ratePlan.nightlyRate, n)
   const currency = state.currency
@@ -60,7 +60,7 @@ export default function BookingSummary() {
             id="booking-summary-title"
             className="text-xl font-medium tracking-tight text-navy"
           >
-            Rate Selection
+            Book Villa
           </h2>
           <button
             type="button"
@@ -78,7 +78,7 @@ export default function BookingSummary() {
             alt={room.name}
             className="h-40 w-full rounded-lg"
           />
-          <p className="type-label mt-3">{categoryName}</p>
+          <p className="type-label mt-3">Villa</p>
           <h3 className="mt-1 text-xl font-medium text-navy md:text-2xl">
             {room.name}
           </h3>

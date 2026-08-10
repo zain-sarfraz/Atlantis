@@ -19,6 +19,15 @@ import { listGuests, getGuest, updateGuest, deleteGuest } from '../controllers/a
 import { listStaff, createStaff, updateStaff, deleteStaff, listAlerts, createAlert, updateAlert, deleteAlert } from '../controllers/admin/staff.controller'
 import { syncLodgify } from '../controllers/admin/lodgify.controller'
 import { listLodgifyBookings } from '../controllers/public/lodgifyWebhook.controller'
+import {
+  getVillaRates,
+  getVillaRatesCalendar,
+  previewRate,
+  putDateRates,
+  putMonthlyRate,
+  putYearlyRate,
+  removeVillaRate,
+} from '../controllers/admin/villaRates.controller'
 
 const router = Router()
 
@@ -60,6 +69,15 @@ router.delete('/rate-plans/:id', requireSuperAdmin, deleteRatePlan)
 router.get('/rate-plans/:id/overrides', listPriceOverrides)
 router.put('/rate-plans/:id/overrides', requireContentEditor, upsertPriceOverride)
 router.delete('/rate-plans/:id/overrides/:overrideId', requireContentEditor, deletePriceOverride)
+
+// ─── Villa rates (yearly / monthly / date) ────────────────────────────────────
+router.get('/villa-rates/preview', previewRate)
+router.get('/villas/:villaId/rates', getVillaRates)
+router.get('/villas/:villaId/rates/calendar', getVillaRatesCalendar)
+router.put('/villas/:villaId/rates/yearly', requireContentEditor, putYearlyRate)
+router.put('/villas/:villaId/rates/monthly', requireContentEditor, putMonthlyRate)
+router.put('/villas/:villaId/rates/dates', requireContentEditor, putDateRates)
+router.delete('/villa-rates/:id', requireContentEditor, removeVillaRate)
 
 // ─── Availability ─────────────────────────────────────────────────────────────
 router.get('/availability/:roomTypeId', getAvailabilityCalendar)

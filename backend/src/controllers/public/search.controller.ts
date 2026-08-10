@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../../config/database'
+import { env } from '../../config/env'
 import { getAvailableRoomTypes, getAverageNightlyRate } from '../../services/availability.service'
-import { getAllRates } from '../../services/currency.service'
+import { convertForDisplay, getAllRates } from '../../services/currency.service'
 import { computeBreakdown, nightsBetween, parseDate } from '../../utils/pricing'
 import { BoardType } from '@prisma/client'
 
@@ -42,6 +43,8 @@ const VIEW_TYPE_LABELS: Record<string, string> = {
 /**
  * GET /api/search
  * Returns available room categories + room types with rate plans and computed prices.
+ * When LODGIFY_PROPERTY_ID is set, only that villa is returned — always included so the
+ * guest UI can show rates even if the selected dates are sold out.
  */
 export async function searchAvailability(req: Request, res: Response, next: NextFunction) {
   try {
@@ -56,15 +59,47 @@ export async function searchAvailability(req: Request, res: Response, next: Next
 
     const nights = nightsBetween(checkIn, checkOut)
     const availableIds = await getAvailableRoomTypes(checkIn, checkOut)
+    const availableSet = new Set(availableIds)
     const rates = await getAllRates()
     const currencyRate = rates[query.currency] ?? 1
+
+    // Always include the configured Limiria villa so the listing never disappears
+    const villa = await prisma.roomType.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          ...(env.lodgifyPropertyId != null
+            ? [{ lodgifyPropertyId: env.lodgifyPropertyId }]
+            : []),
+          { slug: 'limiria-villa-zanzibar' },
+          { name: { contains: 'Limiria' } },
+        ],
+      },
+      select: { id: true },
+    })
+
+    const roomIdSet = new Set(availableIds)
+    if (villa) roomIdSet.add(villa.id)
+
+    // Single-villa mode: only return the Limiria property room types
+    const roomFilter =
+      env.lodgifyPropertyId != null
+        ? {
+            isActive: true as const,
+            lodgifyPropertyId: env.lodgifyPropertyId,
+            id: villa ? { in: [villa.id] } : { in: [] as string[] },
+          }
+        : {
+            isActive: true as const,
+            id: { in: [...roomIdSet] },
+          }
 
     const categories = await prisma.roomCategory.findMany({
       where: { isActive: true },
       orderBy: { displayOrder: 'asc' },
       include: {
         rooms: {
-          where: { isActive: true, id: { in: availableIds } },
+          where: roomFilter,
           orderBy: { displayOrder: 'asc' },
           include: {
             images: { orderBy: { sortOrder: 'asc' } },
@@ -95,19 +130,21 @@ export async function searchAvailability(req: Request, res: Response, next: Next
             gallery: room.images.map((img) => img.url),
             amenities: room.amenities.filter((a) => a.category === 'AMENITY').map((a) => a.name),
             perks: room.amenities.filter((a) => a.category === 'PERK').map((a) => a.name),
+            available: availableSet.has(room.id),
             ratePlans: await Promise.all(
               room.ratePlans.map(async (plan) => {
                 const avgNightlyRate = await getAverageNightlyRate(plan.id, checkIn, checkOut)
                 const breakdown = computeBreakdown(avgNightlyRate, nights)
-                const convertedRate = Math.round(avgNightlyRate * currencyRate)
+                const ratesMap = { [query.currency]: currencyRate, AED: 1 }
+                const convertedRate = convertForDisplay(avgNightlyRate, query.currency, ratesMap)
                 const convertedBreakdown = {
                   nightlyRate: convertedRate,
                   nights,
-                  subtotal: Math.round(breakdown.subtotal * currencyRate),
-                  serviceCharge: Math.round(breakdown.serviceCharge * currencyRate),
-                  municipalityFee: Math.round(breakdown.municipalityFee * currencyRate),
-                  vat: Math.round(breakdown.vat * currencyRate),
-                  total: Math.round(breakdown.total * currencyRate),
+                  subtotal: convertForDisplay(breakdown.subtotal, query.currency, ratesMap),
+                  serviceCharge: convertForDisplay(breakdown.serviceCharge, query.currency, ratesMap),
+                  municipalityFee: convertForDisplay(breakdown.municipalityFee, query.currency, ratesMap),
+                  vat: convertForDisplay(breakdown.vat, query.currency, ratesMap),
+                  total: convertForDisplay(breakdown.total, query.currency, ratesMap),
                 }
                 return {
                   id: plan.id,

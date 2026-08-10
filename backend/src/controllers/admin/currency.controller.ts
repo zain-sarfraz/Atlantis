@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../../config/database'
-import { syncRatesFromApi } from '../../services/currency.service'
+import { invalidateRatesCache, syncRatesFromApi } from '../../services/currency.service'
 
 export async function listRates(req: Request, res: Response, next: NextFunction) {
   try {
@@ -23,6 +23,7 @@ export async function upsertRate(req: Request, res: Response, next: NextFunction
       update: { rate, lastUpdated: new Date() },
       create: { fromCurrency: 'AED', toCurrency, rate },
     })
+    invalidateRatesCache()
     res.json(record)
   } catch (err) { next(err) }
 }

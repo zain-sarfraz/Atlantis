@@ -26,6 +26,8 @@ export interface SubRoom {
   amenities: string[]
   perks: string[]
   ratePlans: RatePlan[]
+  /** False when selected dates are sold out (villa still listed). */
+  available?: boolean
 }
 
 export interface RoomCategory {

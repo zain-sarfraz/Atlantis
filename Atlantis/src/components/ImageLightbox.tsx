@@ -43,6 +43,7 @@ export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps)
         alt={alt}
         className="max-h-[92vh] max-w-[96vw] cursor-default rounded-lg object-contain shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        referrerPolicy="no-referrer"
       />
     </div>,
     document.body,

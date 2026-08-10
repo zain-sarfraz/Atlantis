@@ -1,9 +1,16 @@
 import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../config/database'
 import { createError } from '../../middleware/error'
 import { adjustAvailability } from '../../services/availability.service'
 import { BookingStatus } from '@prisma/client'
+import { scopedBookingWhere } from '../../utils/lodgifyScope'
+import {
+  lodgifySourceWhereForChannels,
+  normalizeLodgifyChannel,
+  parseChannelsQuery,
+} from '../../utils/lodgifyChannels'
 
 const ListBookingsSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -12,25 +19,51 @@ const ListBookingsSchema = z.object({
   search: z.string().optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  channels: z.string().optional(),
 })
 
 export async function listBookings(req: Request, res: Response, next: NextFunction) {
   try {
-    const { page, limit, status, search, from, to } = ListBookingsSchema.parse(req.query)
+    const { page, limit, status, search, from, to, channels: channelsRaw } =
+      ListBookingsSchema.parse(req.query)
     const skip = (page - 1) * limit
+    const channels = parseChannelsQuery(channelsRaw)
 
-    const where: Record<string, unknown> = {}
-    if (status) where.status = status
-    if (from) where.checkIn = { gte: new Date(from) }
-    if (to) where.checkOut = { ...(where.checkOut as object ?? {}), lte: new Date(to) }
-    if (search) {
-      where.OR = [
-        { bookingRef: { contains: search } },
-        { firstName: { contains: search } },
-        { lastName: { contains: search } },
-        { email: { contains: search } },
-      ]
+    const filters: Prisma.BookingWhereInput = {}
+    if (status) filters.status = status
+    if (from) filters.checkIn = { gte: new Date(from) }
+    if (to) filters.checkOut = { ...(filters.checkOut as object ?? {}), lte: new Date(to) }
+
+    const andParts: Prisma.BookingWhereInput[] = []
+
+    const q = search?.trim()
+    if (q) {
+      // Support full-name search ("Jane Doe") by requiring each word to match a field
+      const words = q.split(/\s+/).filter(Boolean)
+      for (const word of words) {
+        andParts.push({
+          OR: [
+            { bookingRef: { contains: word } },
+            { firstName: { contains: word } },
+            { lastName: { contains: word } },
+            { email: { contains: word } },
+            { phone: { contains: word } },
+            { lodgifySource: { contains: word } },
+          ],
+        })
+      }
     }
+
+    const sourceClauses = channels ? lodgifySourceWhereForChannels(channels) : undefined
+    if (sourceClauses?.length) {
+      andParts.push({ OR: sourceClauses })
+    }
+
+    if (andParts.length) {
+      filters.AND = andParts
+    }
+
+    const where = scopedBookingWhere(filters)
 
     const [bookings, total] = await Promise.all([
       prisma.booking.findMany({
@@ -51,8 +84,19 @@ export async function listBookings(req: Request, res: Response, next: NextFuncti
       prisma.booking.count({ where }),
     ])
 
-    res.json({ bookings, total, page, limit, pages: Math.ceil(total / limit) })
-  } catch (err) { next(err) }
+    res.json({
+      bookings: bookings.map((b) => ({
+        ...b,
+        channel: normalizeLodgifyChannel(b.lodgifySource),
+      })),
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    })
+  } catch (err) {
+    next(err)
+  }
 }
 
 export async function getBooking(req: Request, res: Response, next: NextFunction) {

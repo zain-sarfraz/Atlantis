@@ -17,16 +17,20 @@ export function nightsBetween(checkIn: Date, checkOut: Date): number {
   return Math.max(0, Math.round(ms / (1000 * 60 * 60 * 24)))
 }
 
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
 export function computeBreakdown(
   nightlyRate: number,
   nights: number,
 ): PriceBreakdown {
-  const subtotal = nightlyRate * nights
-  const serviceCharge = Math.round(subtotal * FEE_RATES.serviceCharge)
-  const municipalityFee = Math.round(subtotal * FEE_RATES.municipalityFee)
+  const subtotal = roundMoney(nightlyRate * nights)
+  const serviceCharge = roundMoney(subtotal * FEE_RATES.serviceCharge)
+  const municipalityFee = roundMoney(subtotal * FEE_RATES.municipalityFee)
   const taxable = subtotal + serviceCharge + municipalityFee
-  const vat = Math.round(taxable * FEE_RATES.vat)
-  const total = subtotal + serviceCharge + municipalityFee + vat
+  const vat = roundMoney(taxable * FEE_RATES.vat)
+  const total = roundMoney(subtotal + serviceCharge + municipalityFee + vat)
 
   return {
     nightlyRate,
@@ -41,16 +45,29 @@ export function computeBreakdown(
 
 /** Convert AED amount into selected currency using live admin rates */
 export function convertAmount(aed: number, currency: Currency): number {
-  return Math.round(aed * getCurrencyRate(currency))
+  const raw = aed * getCurrencyRate(currency)
+  if (currency === 'AED') return Math.round(raw)
+  return Math.round(raw * 100) / 100
 }
 
 /**
  * Format a money amount already denominated in `currency`
  * (search API returns converted rates — do not convert again).
+ * AED: whole numbers; USD/EUR/GBP: 2 decimals.
  */
 export function formatMoney(amount: number, currency: Currency): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? currency
-  return `${symbol} ${Math.round(amount).toLocaleString()}`
+  try {
+    return new Intl.NumberFormat('en', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: currency === 'AED' ? 0 : 2,
+      maximumFractionDigits: currency === 'AED' ? 0 : 2,
+    }).format(amount)
+  } catch {
+    const symbol = CURRENCY_SYMBOLS[currency] ?? currency
+    const n = currency === 'AED' ? Math.round(amount) : Math.round(amount * 100) / 100
+    return `${symbol} ${n.toLocaleString()}`
+  }
 }
 
 export function startOfDay(d: Date): Date {

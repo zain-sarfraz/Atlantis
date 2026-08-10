@@ -1,5 +1,6 @@
 import { BookingStatus } from '@prisma/client'
 import { prisma } from '../config/database'
+import { normalizeLodgifyChannel } from '../utils/lodgifyChannels'
 import { generateBookingRef } from '../utils/pricing'
 
 /** Minimal fields needed from parseLodgifyEvent (avoids importing the controller). */
@@ -89,7 +90,7 @@ function extractExtrasFromEvent(event: unknown): {
   const root = asObject(event) ?? {}
   const booking = asObject(root.booking) ?? {}
   const guest = asObject(root.guest) ?? {}
-  const rooms = booking.room_types ?? booking.roomTypes
+  const rooms = booking.rooms ?? booking.room_types ?? booking.roomTypes
   const firstRoom = Array.isArray(rooms) ? asObject(rooms[0]) : null
   const breakdown = asObject(firstRoom?.guest_breakdown) ?? asObject(firstRoom?.guestBreakdown)
 
@@ -108,8 +109,14 @@ function extractExtrasFromEvent(event: unknown): {
   const totalAmount =
     toFloat(root.booking_total_amount) ??
     toFloat(root.bookingTotalAmount) ??
+    toFloat(root.booking_amount) ??
+    toFloat(root.bookingAmount) ??
     toFloat(booking.total_amount) ??
+    toFloat(booking.totalAmount) ??
     toFloat(booking.amount) ??
+    toFloat(booking.total) ??
+    toFloat(booking.gross_amount) ??
+    toFloat(booking.grossAmount) ??
     0
 
   const currencyRaw =
@@ -145,6 +152,19 @@ function nightsBetween(checkIn: Date, checkOut: Date): number {
  * Upsert a dashboard Booking (+ BookingItem when RoomType is mapped)
  * from a parsed Lodgify webhook event. Idempotent on lodgifyBookingId.
  */
+function extractLodgifyRoomName(event: unknown): string | null {
+  const root = asObject(event) ?? {}
+  const booking = asObject(root.booking) ?? {}
+  const rooms = booking.rooms ?? booking.room_types ?? booking.roomTypes
+  const firstRoom = Array.isArray(rooms) ? asObject(rooms[0]) : null
+  const name =
+    firstRoom?.name ?? firstRoom?.room_type_name ?? firstRoom?.roomTypeName ??
+    firstRoom?.title ?? firstRoom?.roomName
+  if (!name || typeof name !== 'string') return null
+  const trimmed = name.trim()
+  return trimmed.length > 0 ? trimmed.slice(0, 120) : null
+}
+
 export async function upsertDashboardBookingFromLodgify(
   parsed: LodgifyParsedForBooking,
   event: unknown,
@@ -164,7 +184,8 @@ export async function upsertDashboardBookingFromLodgify(
   const extras = extractExtrasFromEvent(event)
   const status = mapLodgifyStatusToBookingStatus(parsed.status, parsed.action)
   const email = (parsed.guestEmail ?? 'channel-guest@lodgify.local').slice(0, 255)
-  const lodgifySource = (parsed.source ?? parsed.action ?? 'Lodgify').slice(0, 100)
+  const lodgifySource = normalizeLodgifyChannel(parsed.source ?? parsed.action ?? 'Others')
+  const lodgifyRoomName = extractLodgifyRoomName(event)
   const nights = nightsBetween(parsed.arrival, parsed.departure)
 
   // Resolve RoomType by lodgifyRoomTypeId (+ optional property)
@@ -242,8 +263,7 @@ export async function upsertDashboardBookingFromLodgify(
     totalAmount: extras.totalAmount > 0 ? extras.totalAmount : itemTotal,
     currency: extras.currency,
     lodgifyBookingId: parsed.bookingId,
-    lodgifySource,
-    specialRequests: `Synced from Lodgify (${lodgifySource})`,
+    lodgifySource,    lodgifyRoomName,    specialRequests: `Synced from Lodgify (${lodgifySource}${lodgifyRoomName ? ` / ${lodgifyRoomName}` : ''})`,
     confirmedAt: status === BookingStatus.CONFIRMED ? new Date() : null,
     cancelledAt: status === BookingStatus.CANCELLED ? new Date() : null,
   }

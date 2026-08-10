@@ -1,5 +1,15 @@
 // Backend API client for Serrano Hotel frontend
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+/** Origin only, e.g. https://atlantisbackend.toolkitpro.cloud — empty = same-origin / Vite proxy */
+const API_ORIGIN = String(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const BASE = API_ORIGIN ? `${API_ORIGIN}/api` : '/api'
+
+/** Resolve relative upload paths against the API host */
+export function assetUrl(path?: string | null): string {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return API_ORIGIN ? `${API_ORIGIN}${normalized}` : normalized
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -64,6 +74,7 @@ export interface ApiRoom {
   gallery: string[]
   amenities: string[]
   perks: string[]
+  available?: boolean
   ratePlans: ApiRatePlan[]
 }
 

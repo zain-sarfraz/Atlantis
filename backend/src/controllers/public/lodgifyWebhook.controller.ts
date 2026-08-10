@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../config/database'
 import { upsertDashboardBookingFromLodgify } from '../../services/lodgifyDashboardBooking.service'
+import { scopedLodgifyPropertyId } from '../../utils/lodgifyScope'
 
 type JsonObject = Record<string, unknown>
 
@@ -67,7 +68,7 @@ export function parseLodgifyEvent(event: unknown, fallbackAction?: string): Pars
   const booking = asObject(root.booking) ?? {}
   const guest = asObject(root.guest) ?? {}
 
-  const rooms = booking.room_types ?? booking.roomTypes
+  const rooms = booking.rooms ?? booking.room_types ?? booking.roomTypes
   const firstRoom = Array.isArray(rooms) ? asObject(rooms[0]) : null
   const roomId =
     toInt(firstRoom?.room_type_id) ??
@@ -275,8 +276,10 @@ export async function listLodgifyBookings(req: Request, res: Response, next: Nex
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined
     const propertyIdRaw = typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined
-    const propertyId =
+    const propertyIdFromQuery =
       propertyIdRaw && /^\d+$/.test(propertyIdRaw) ? parseInt(propertyIdRaw, 10) : undefined
+    // Prefer explicit query; otherwise scope to LODGIFY_PROPERTY_ID when configured
+    const propertyId = propertyIdFromQuery ?? scopedLodgifyPropertyId()
 
     const rows = await prisma.lodgifyBooking.findMany({
       where: {

@@ -1,13 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, BedDouble, Calendar, BookOpen, Tag, DollarSign,
+  LayoutDashboard, Calendar, BookOpen, Tag, DollarSign,
   Users, Bell, LogOut,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const links = [
   { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/admin/rooms', icon: BedDouble, label: 'Rooms & Rates' },
   { to: '/admin/availability', icon: Calendar, label: 'Availability' },
   { to: '/admin/bookings', icon: BookOpen, label: 'Bookings' },
   { to: '/admin/promos', icon: Tag, label: 'Promo Codes' },
@@ -60,7 +59,7 @@ export default function Sidebar() {
             {admin?.firstName} {admin?.lastName}
           </p>
           <p className="text-xs text-[#8c8279]">
-            {admin?.role ? admin.role.replaceAll('_', ' ') : ''}
+            {admin?.role ? admin.role.split('_').join(' ') : ''}
           </p>
         </div>
         <button

@@ -1,7 +1,10 @@
 import { prisma } from '../config/database'
+import { env } from '../config/env'
 import { isLodgifyConfigured } from '../config/lodgify'
+import { normalizeLodgifyChannel } from '../utils/lodgifyChannels'
 import { parseDate } from '../utils/pricing'
 import {
+  extractBookingAmount,
   extractBookingDates,
   extractBookingId,
   extractBookingPropertyId,
@@ -31,6 +34,22 @@ function eachDayInclusiveStartExclusiveEnd(start: Date, end: Date): string[] {
   return days
 }
 
+/** Lodgify availability periods use inclusive start AND end dates. */
+function eachDayInclusive(start: Date, end: Date): string[] {
+  const days: string[] = []
+  const cur = new Date(start)
+  const last = new Date(end)
+  while (cur <= last) {
+    days.push(cur.toISOString().slice(0, 10))
+    cur.setUTCDate(cur.getUTCDate() + 1)
+  }
+  return days
+}
+
+function isValidIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !value.startsWith('0001-')
+}
+
 function defaultSyncWindow(): { start: string; end: string } {
   const start = new Date()
   start.setUTCHours(0, 0, 0, 0)
@@ -40,6 +59,14 @@ function defaultSyncWindow(): { start: string; end: string } {
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10),
   }
+}
+
+/** When LODGIFY_PROPERTY_ID is set, only that property is synced. */
+function lodgifyPropertyFilter(): { lodgifyPropertyId: number } | { lodgifyPropertyId: { not: null } } {
+  if (env.lodgifyPropertyId != null) {
+    return { lodgifyPropertyId: env.lodgifyPropertyId }
+  }
+  return { lodgifyPropertyId: { not: null } }
 }
 
 /**
@@ -65,7 +92,7 @@ export async function syncAvailabilityFromLodgify(): Promise<SyncResult> {
   const mappedRooms = await prisma.roomType.findMany({
     where: {
       isActive: true,
-      lodgifyPropertyId: { not: null },
+      ...lodgifyPropertyFilter(),
       lodgifyRoomTypeId: { not: null },
     },
     include: {
@@ -75,7 +102,9 @@ export async function syncAvailabilityFromLodgify(): Promise<SyncResult> {
 
   if (mappedRooms.length === 0) {
     result.message =
-      'No room types mapped to Lodgify. Set lodgifyPropertyId and lodgifyRoomTypeId on RoomType records.'
+      env.lodgifyPropertyId != null
+        ? `No room types mapped to Lodgify property ${env.lodgifyPropertyId}.`
+        : 'No room types mapped to Lodgify. Set lodgifyPropertyId and lodgifyRoomTypeId on RoomType records.'
     return result
   }
 
@@ -98,20 +127,24 @@ export async function syncAvailabilityFromLodgify(): Promise<SyncResult> {
       for (const room of rooms) {
         result.roomsProcessed += 1
         const roomTypeIdLodgify = room.lodgifyRoomTypeId!
-        const periods = periodsByRoom.get(roomTypeIdLodgify) ?? periodsByRoom.get(0) ?? []
+        // Prefer exact room match; only fall back to unscoped periods when this
+        // property has a single mapped room (vacation-rental style responses).
+        let periods = periodsByRoom.get(roomTypeIdLodgify)
+        if (!periods?.length && rooms.length === 1) {
+          periods = periodsByRoom.get(0) ?? (periodsByRoom.size === 1 ? [...periodsByRoom.values()][0] : [])
+        }
+        periods = periods ?? []
 
         for (const period of periods) {
-          const periodStart = parseDate(period.start.slice(0, 10))
-          // Lodgify periods often use inclusive end dates; treat end as exclusive for inventory nights
-          let periodEnd = parseDate(period.end.slice(0, 10))
-          // If end looks like same-day or timestamp end-of-day exclusive already, keep as-is
-          if (period.end.includes('T') && period.end.includes('23:59')) {
-            periodEnd = new Date(periodEnd)
-            periodEnd.setUTCDate(periodEnd.getUTCDate() + 1)
-          }
+          const startIso = period.start.slice(0, 10)
+          const endIso = period.end.slice(0, 10)
+          if (!isValidIsoDate(startIso) || !isValidIsoDate(endIso)) continue
 
-          const availableCount = period.available > 0 ? period.available : 0
-          const dates = eachDayInclusiveStartExclusiveEnd(periodStart, periodEnd)
+          const periodStart = parseDate(startIso)
+          const periodEnd = parseDate(endIso)
+          // Lodgify villa inventory is 0 or 1 unit
+          const availableCount = period.available > 0 ? 1 : 0
+          const dates = eachDayInclusive(periodStart, periodEnd)
 
           for (const dateStr of dates) {
             // Only touch dates inside our sync window
@@ -188,14 +221,16 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
   const mappedRooms = await prisma.roomType.findMany({
     where: {
       isActive: true,
-      lodgifyPropertyId: { not: null },
+      ...lodgifyPropertyFilter(),
       lodgifyRoomTypeId: { not: null },
     },
   })
 
   if (mappedRooms.length === 0) {
     result.message =
-      'No room types mapped to Lodgify. Set lodgifyPropertyId and lodgifyRoomTypeId on RoomType records.'
+      env.lodgifyPropertyId != null
+        ? `No room types mapped to Lodgify property ${env.lodgifyPropertyId}.`
+        : 'No room types mapped to Lodgify. Set lodgifyPropertyId and lodgifyRoomTypeId on RoomType records.'
     return result
   }
 
@@ -206,20 +241,31 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
     roomByLodgifyKey.set(`${room.lodgifyPropertyId}:${room.lodgifyRoomTypeId}`, room)
   }
 
+  if (env.lodgifyPropertyId != null) {
+    console.log(`[Lodgify sync] scoped to property ${env.lodgifyPropertyId} only`)
+  }
+
   const cancelledStatuses = new Set(['declined', 'cancelled', 'canceled', 'open', 'deleted'])
 
   for (const propertyId of propertyIds) {
     try {
-      const bookings = await getBookings(propertyId)
+      // Fetch all bookings (including historic) so past reservations are imported into the dashboard
+      const bookings = await getBookings(propertyId, { stayFilter: 'All' })
+      const fetchedCount = Array.isArray(bookings) ? bookings.length : 0
+      console.log(`[Lodgify sync] property ${propertyId}: fetched ${fetchedCount} bookings (stayFilter=All)`)
       result.roomsProcessed += 1
 
       for (const booking of bookings) {
         const lodgifyId = extractBookingId(booking)
-        if (!lodgifyId) continue
+        if (!lodgifyId) {
+          console.log('[Lodgify sync] skipping booking without id', booking)
+          continue
+        }
 
         const status = extractBookingStatus(booking)
-        if (cancelledStatuses.has(status)) {
-          // If we previously synced this booking and it was cancelled, release inventory once
+        const isCancelledBookingTop = cancelledStatuses.has(status)
+        if (isCancelledBookingTop) {
+          // If we previously synced this booking and it was cancelled, release inventory once and skip further work
           const existing = await prisma.booking.findUnique({ where: { lodgifyBookingId: lodgifyId } })
           if (existing && existing.status !== 'CANCELLED') {
             await prisma.booking.update({
@@ -230,12 +276,17 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
               await releaseDates(item.roomTypeId, existing.checkIn, existing.checkOut)
               result.datesUpdated += 1
             }
+            console.log(`[Lodgify sync] ${lodgifyId}: marked existing booking ${existing.id} as CANCELLED`)
+            continue
           }
-          continue
+          // If not existing, fall through and create a local booking record with status CANCELLED
         }
 
         const dates = extractBookingDates(booking)
-        if (!dates) continue
+        if (!dates) {
+          console.log(`[Lodgify sync] ${lodgifyId}: skipped (invalid or missing dates)`)
+          continue
+        }
 
         const roomTypeLodgify = extractBookingRoomTypeId(booking)
         const propertyLodgify = extractBookingPropertyId(booking) ?? propertyId
@@ -250,6 +301,7 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
           if (forProperty.length === 1) localRoom = forProperty[0]
         }
         if (!localRoom) {
+          console.log(`[Lodgify sync] ${lodgifyId}: skipped (no local room mapping for property ${propertyLodgify})`)
           result.errors.push(`No local room mapped for Lodgify booking ${lodgifyId}`)
           continue
         }
@@ -258,7 +310,8 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
         const checkOut = parseDate(dates.departure)
         const guest = extractGuest(booking)
         const source = extractSource(booking)
-        const totalAmount = extractAmount(booking)
+        const totalAmount = extractBookingAmount(booking)
+        const lodgifyRoomName = extractLodgifyRoomName(booking)
 
         const existing = await prisma.booking.findUnique({ where: { lodgifyBookingId: lodgifyId } })
         if (existing) {
@@ -274,29 +327,57 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
             }
             await prisma.booking.update({
               where: { id: existing.id },
-              data: { checkIn, checkOut, lodgifySource: source ?? existing.lodgifySource },
+              data: {
+                checkIn,
+                checkOut,
+                lodgifySource: source ?? existing.lodgifySource,
+                specialRequests: source
+                  ? `Synced from Lodgify (${source}${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''})`
+                  : `Synced from Lodgify${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''}`,
+              },
             })
             result.bookingsSynced += 1
             result.datesUpdated += 1
+            console.log(`[Lodgify sync] ${lodgifyId}: updated existing booking ${existing.id} (dates changed)`)
+          } else {
+            console.log(`[Lodgify sync] ${lodgifyId}: skipped (already exists with same dates, local id=${existing.id})`)
           }
           continue
         }
 
         // Create a lightweight local booking record for channel reservations
-        const ratePlan = await prisma.ratePlan.findFirst({
+        let ratePlan = await prisma.ratePlan.findFirst({
           where: { roomTypeId: localRoom.id, isActive: true },
           orderBy: { createdAt: 'asc' },
         })
 
-        // Always block dates (idempotent) even if we cannot create a Booking row
-        await blockDates(localRoom.id, checkIn, checkOut)
-        result.datesUpdated += eachDayInclusiveStartExclusiveEnd(checkIn, checkOut).length
+        const isCancelledBooking = cancelledStatuses.has(status)
+
+        // For non-cancelled bookings, always block dates (idempotent). For cancelled bookings, do not block.
+        if (!isCancelledBooking) {
+          await blockDates(localRoom.id, checkIn, checkOut)
+          result.datesUpdated += eachDayInclusiveStartExclusiveEnd(checkIn, checkOut).length
+        }
 
         if (!ratePlan) {
-          result.errors.push(
-            `Booking ${lodgifyId}: no rate plan on room ${localRoom.id}; dates blocked only`,
-          )
-          continue
+          try {
+            // Create a fallback rate plan so we can import bookings
+            const name = 'ROOM_ONLY'
+            ratePlan = await prisma.ratePlan.create({
+              data: {
+                roomTypeId: localRoom.id,
+                name,
+                description: 'Auto-created fallback rate plan for Lodgify imports',
+                basePrice: 0,
+                isActive: true,
+              },
+            })
+            result.errors.push(`Created fallback rate plan ${ratePlan.id} for room ${localRoom.id}`)
+            console.log(`[Lodgify sync] ${lodgifyId}: created fallback rate plan ${ratePlan.id} for room ${localRoom.id}`)
+          } catch (rpErr) {
+            console.log(`[Lodgify sync] ${lodgifyId}: failed to create fallback rate plan for room ${localRoom.id}:`, rpErr)
+            result.errors.push(`Booking ${lodgifyId}: failed to create fallback rate plan for room ${localRoom.id}`)
+          }
         }
 
         const bookingRef = await uniqueChannelRef(lodgifyId)
@@ -305,13 +386,13 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
           Math.round((checkOut.getTime() - checkIn.getTime()) / (24 * 60 * 60 * 1000)),
         )
 
-        await prisma.booking.create({
+        const created = await prisma.booking.create({
           data: {
             bookingRef,
             lodgifyBookingId: lodgifyId,
             lodgifySource: source,
             currency: 'AED',
-            status: 'CONFIRMED',
+            status: isCancelledBooking ? 'CANCELLED' : 'CONFIRMED',
             totalAmount,
             checkIn,
             checkOut,
@@ -322,12 +403,14 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
             lastName: guest.lastName,
             email: guest.email,
             phone: guest.phone,
-            specialRequests: source ? `Synced from Lodgify (${source})` : 'Synced from Lodgify',
+            specialRequests: source
+              ? `Synced from Lodgify (${source}${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''})`
+              : `Synced from Lodgify${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''}`,
             confirmedAt: new Date(),
             items: {
               create: {
                 roomTypeId: localRoom.id,
-                ratePlanId: ratePlan.id,
+                ratePlanId: ratePlan!.id,
                 nightlyRate: 0,
                 nights,
                 subtotal: 0,
@@ -340,6 +423,7 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
           },
         })
         result.bookingsSynced += 1
+        console.log(`[Lodgify sync] ${lodgifyId}: created local booking id=${created.id}`)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -620,13 +704,22 @@ function extractSource(booking: unknown): string | null {
   if (!booking || typeof booking !== 'object') return null
   const b = booking as Record<string, unknown>
   const source = b.source ?? b.source_text ?? b.sourceText ?? b.channel ?? b.origin
-  return source != null ? String(source) : null
+  if (source == null) return null
+  return normalizeLodgifyChannel(String(source))
 }
 
-function extractAmount(booking: unknown): number {
-  if (!booking || typeof booking !== 'object') return 0
+function extractLodgifyRoomName(booking: unknown): string | null {
+  if (!booking || typeof booking !== 'object') return null
   const b = booking as Record<string, unknown>
-  const amount = b.totalAmount ?? b.total_amount ?? b.amount ?? b.total
-  const n = Number(amount)
-  return Number.isFinite(n) ? n : 0
+  const rooms = b.rooms ?? b.room_types ?? b.roomTypes
+  const firstRoom = Array.isArray(rooms) ? (rooms[0] as Record<string, unknown>) : null
+  const name =
+    firstRoom?.name ??
+    firstRoom?.room_type_name ??
+    firstRoom?.roomTypeName ??
+    firstRoom?.title ??
+    firstRoom?.roomName
+  if (!name || typeof name !== 'string') return null
+  const trimmed = name.trim()
+  return trimmed.length > 0 ? trimmed.slice(0, 120) : null
 }

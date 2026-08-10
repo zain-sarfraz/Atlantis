@@ -4,7 +4,20 @@ import { env } from '../config/env'
 export const SUPPORTED_CURRENCIES = ['AED', 'USD', 'EUR', 'GBP'] as const
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number]
 
-/** Get all rates from AED to supported currencies. */
+type RatesCache = {
+  rates: Record<string, number>
+  fetchedAt: number
+}
+
+const CACHE_TTL_MS = 3 * 60 * 60 * 1000 // 3 hours
+let memoryCache: RatesCache | null = null
+
+/** Clear in-memory FX cache after admin edits so guest search picks up new rates. */
+export function invalidateRatesCache() {
+  memoryCache = null
+}
+
+/** Get all rates from AED to supported currencies (DB). */
 export async function getAllRates(): Promise<Record<string, number>> {
   const records = await prisma.currencyRate.findMany({
     where: { fromCurrency: 'AED' },
@@ -14,6 +27,28 @@ export async function getAllRates(): Promise<Record<string, number>> {
   for (const r of records) {
     rates[r.toCurrency] = r.rate
   }
+  return rates
+}
+
+/** Cached rates; refreshes from API when stale. */
+export async function getAllRatesCached(): Promise<Record<string, number>> {
+  const now = Date.now()
+  if (memoryCache && now - memoryCache.fetchedAt < CACHE_TTL_MS) {
+    return memoryCache.rates
+  }
+
+  // Refresh from external API if DB rows are stale / missing
+  const latest = await prisma.currencyRate.findFirst({
+    where: { fromCurrency: 'AED' },
+    orderBy: { lastUpdated: 'desc' },
+  })
+  const dbAge = latest?.lastUpdated ? now - latest.lastUpdated.getTime() : Number.POSITIVE_INFINITY
+  if (dbAge > CACHE_TTL_MS) {
+    await syncRatesFromApi()
+  }
+
+  const rates = await getAllRates()
+  memoryCache = { rates, fetchedAt: now }
   return rates
 }
 
@@ -28,8 +63,42 @@ export async function getRate(toCurrency: string): Promise<number> {
   return record.rate
 }
 
+/** Legacy whole-number convert (guest search). Prefer convertForDisplay for UI. */
 export function convertAmount(aedAmount: number, rate: number): number {
   return Math.round(aedAmount * rate)
+}
+
+/**
+ * Convert AED → currency with sensible rounding:
+ * AED: integer; USD/EUR/GBP: 2 decimals.
+ */
+export function convertForDisplay(
+  aedAmount: number,
+  currency: string,
+  rates: Record<string, number>,
+): number {
+  const rate = rates[currency] ?? (currency === 'AED' ? 1 : 0)
+  const raw = aedAmount * rate
+  if (currency === 'AED') return Math.round(raw)
+  return Math.round(raw * 100) / 100
+}
+
+export function formatConverted(
+  aedAmount: number,
+  currency: string,
+  rates: Record<string, number>,
+): string {
+  const value = convertForDisplay(aedAmount, currency, rates)
+  try {
+    return new Intl.NumberFormat('en', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: currency === 'AED' ? 0 : 2,
+      maximumFractionDigits: currency === 'AED' ? 0 : 2,
+    }).format(value)
+  } catch {
+    return `${currency} ${value}`
+  }
 }
 
 /** Fetch live rates from external API and update the DB. */
@@ -57,6 +126,7 @@ export async function syncRatesFromApi(): Promise<void> {
         ),
     )
 
+    memoryCache = null
     console.log('[Currency] Rates synced from API')
   } catch (err) {
     console.error('[Currency] Failed to sync rates:', err)

@@ -181,7 +181,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
             adults: data.adults,
             children: data.children,
             status: 'booked',
-            source: 'Direct Website',
+            source: 'Websites',
             notes: data.specialRequests,
             totalAmount: d.breakdown.total,
             currency: data.currency,
@@ -191,7 +191,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
           if (!booking.lodgifyBookingId) {
             await prisma.booking.update({
               where: { id: booking.id },
-              data: { lodgifyBookingId: String(lodgifyResult.id), lodgifySource: 'Direct Website' },
+              data: { lodgifyBookingId: String(lodgifyResult.id), lodgifySource: 'Websites' },
             })
           }
         }

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../../config/database'
+import { scopedBookingItemWhere, scopedBookingWhere } from '../../utils/lodgifyScope'
 
 export async function getDashboard(req: Request, res: Response, next: NextFunction) {
   try {
@@ -24,22 +25,27 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
       recentBookings,
       topRoomTypes,
     ] = await Promise.all([
-      prisma.booking.count(),
-      prisma.booking.count({ where: { status: 'CONFIRMED' } }),
-      prisma.booking.count({ where: { status: 'PENDING' } }),
-      prisma.booking.count({ where: { status: 'CANCELLED' } }),
+      prisma.booking.count({ where: scopedBookingWhere() }),
+      prisma.booking.count({ where: scopedBookingWhere({ status: 'CONFIRMED' }) }),
+      prisma.booking.count({ where: scopedBookingWhere({ status: 'PENDING' }) }),
+      prisma.booking.count({ where: scopedBookingWhere({ status: 'CANCELLED' }) }),
       prisma.booking.aggregate({
-        where: { status: { not: 'CANCELLED' }, createdAt: { gte: firstOfMonth } },
+        where: scopedBookingWhere({ status: { not: 'CANCELLED' }, createdAt: { gte: firstOfMonth } }),
         _sum: { totalAmount: true },
       }),
       prisma.booking.aggregate({
-        where: { status: { not: 'CANCELLED' } },
+        where: scopedBookingWhere({ status: { not: 'CANCELLED' } }),
         _sum: { totalAmount: true },
       }),
-      prisma.booking.count({ where: { checkIn: { gte: today, lt: tomorrow }, status: { not: 'CANCELLED' } } }),
-      prisma.booking.count({ where: { checkOut: { gte: today, lt: tomorrow }, status: { not: 'CANCELLED' } } }),
+      prisma.booking.count({
+        where: scopedBookingWhere({ checkIn: { gte: today, lt: tomorrow }, status: { not: 'CANCELLED' } }),
+      }),
+      prisma.booking.count({
+        where: scopedBookingWhere({ checkOut: { gte: today, lt: tomorrow }, status: { not: 'CANCELLED' } }),
+      }),
       prisma.guest.count(),
       prisma.booking.findMany({
+        where: scopedBookingWhere(),
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -48,6 +54,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
       }),
       prisma.bookingItem.groupBy({
         by: ['roomTypeId'],
+        where: scopedBookingItemWhere(),
         _count: { id: true },
         _sum: { total: true },
         orderBy: { _count: { id: 'desc' } },
@@ -66,7 +73,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     // Revenue chart — last 30 days
     const revenueByDay = await prisma.booking.groupBy({
       by: ['createdAt'],
-      where: { status: { not: 'CANCELLED' }, createdAt: { gte: thirtyDaysAgo } },
+      where: scopedBookingWhere({ status: { not: 'CANCELLED' }, createdAt: { gte: thirtyDaysAgo } }),
       _sum: { totalAmount: true },
     })
 

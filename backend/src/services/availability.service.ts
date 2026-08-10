@@ -40,24 +40,26 @@ export async function getAvailableRoomTypes(checkIn: Date, checkOut: Date): Prom
 
 /**
  * Get the effective nightly rate for a rate plan on a given date.
- * Checks PriceOverride first, then falls back to basePrice.
+ * Priority: villa specific date > monthly > yearly > PriceOverride > RatePlan.basePrice.
  */
 export async function getEffectiveRate(
   ratePlanId: string,
   date: Date,
 ): Promise<number | null> {
-  const override = await prisma.priceOverride.findUnique({
-    where: { ratePlanId_date: { ratePlanId, date } },
+  const plan = await prisma.ratePlan.findUnique({
+    where: { id: ratePlanId },
+    select: { basePrice: true, roomTypeId: true },
   })
-  if (override) return override.price
+  if (!plan) return null
 
-  const plan = await prisma.ratePlan.findUnique({ where: { id: ratePlanId }, select: { basePrice: true } })
-  return plan?.basePrice ?? null
+  const { resolveNightlyRateAed } = await import('./villaRates.service')
+  const resolved = await resolveNightlyRateAed(plan.roomTypeId, ratePlanId, date)
+  return resolved.price
 }
 
 /**
  * Compute the average nightly rate for a rate plan over a date range.
- * Handles per-day overrides for seasonal pricing.
+ * Uses VillaRate priority chain (date > month > year > override > base).
  */
 export async function getAverageNightlyRate(
   ratePlanId: string,
@@ -66,21 +68,10 @@ export async function getAverageNightlyRate(
 ): Promise<number> {
   const plan = await prisma.ratePlan.findUniqueOrThrow({
     where: { id: ratePlanId },
-    select: { basePrice: true },
+    select: { roomTypeId: true },
   })
-
-  const overrides = await prisma.priceOverride.findMany({
-    where: {
-      ratePlanId,
-      date: { gte: checkIn, lt: checkOut },
-    },
-  })
-
-  const overrideMap = new Map(overrides.map((o) => [o.date.toISOString().slice(0, 10), o.price]))
-  const dates = eachDay(checkIn, checkOut)
-
-  const total = dates.reduce((sum, d) => sum + (overrideMap.get(d) ?? plan.basePrice), 0)
-  return Math.round((total / dates.length) * 100) / 100
+  const { averageNightlyRateAed } = await import('./villaRates.service')
+  return averageNightlyRateAed(plan.roomTypeId, ratePlanId, checkIn, checkOut)
 }
 
 /**

@@ -20,7 +20,7 @@ export default function MyBookingsPage() {
         <div className="mt-12 rounded-lg border border-border bg-white py-16 text-center">
           <p className="text-xl font-medium text-navy">No bookings yet</p>
           <p className="mt-2 text-sm text-slate-500">
-            Book a room and complete checkout to see it here.
+            Book the villa and complete checkout to see it here.
           </p>
           <Link
             to="/"

@@ -100,6 +100,7 @@ model RoomType {
   availability      Availability[]
   bookingItems      BookingItem[]
   promoApplications PromoCodeRoomType[]
+  villaRates        VillaRate[]
 
   @@index([lodgifyPropertyId])
   @@index([lodgifyRoomTypeId])
@@ -151,6 +152,32 @@ model PriceOverride {
   createdAt  DateTime @default(now())
 
   @@unique([ratePlanId, date])
+}
+
+enum VillaRateType {
+  YEARLY
+  MONTHLY
+  SPECIFIC_DATE
+}
+
+/// Admin-managed villa nightly rates (AED). Priority: SPECIFIC_DATE > MONTHLY > YEARLY.
+model VillaRate {
+  id         String        @id @default(cuid())
+  villaId    String
+  villa      RoomType      @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  rateType   VillaRateType
+  /// 1–12 when rateType = MONTHLY
+  month      Int?
+  /// Calendar day when rateType = SPECIFIC_DATE
+  date       DateTime?     @db.Date
+  /// Nightly rate stored in AED
+  basePrice  Float
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([villaId, rateType])
+  @@index([villaId, date])
+  @@index([villaId, month])
 }
 
 // ─── Inventory / Availability ─────────────────────────────────────────────────

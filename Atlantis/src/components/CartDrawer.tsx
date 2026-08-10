@@ -61,7 +61,7 @@ export default function CartDrawer() {
                 Your cart is empty
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Select a room rate to begin your reservation.
+                Select a villa rate to begin your reservation.
               </p>
               <p className="type-price mt-4 text-3xl">0</p>
               <button
@@ -69,7 +69,7 @@ export default function CartDrawer() {
                 onClick={() => toggleCart(false)}
                 className="mt-6 rounded-lg bg-sand px-6 py-3 text-sm font-medium uppercase tracking-wide text-navy focus:ring-2 focus:ring-navy"
               >
-                Browse Rooms
+                Browse Villa
               </button>
             </div>
           ) : (

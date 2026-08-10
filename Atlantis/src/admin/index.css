@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  /* Limiria Villa */
+  --navy: #5e544b;
+  --sand: #bca37f;
+  --sand-dark: #a89068;
+  --cream: #faf7f2;
+  --cream-dark: #f2ede4;
+  --charcoal: #4a4238;
+  --ink: #5e544b;
+  --taupe: #8c8279;
+  --border: #d6d0c7;
+}
+
+body {
+  font-family: 'Manrope', system-ui, sans-serif;
+  background-color: #faf7f2;
+  color: #5e544b;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #bca37f; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #a89068; }

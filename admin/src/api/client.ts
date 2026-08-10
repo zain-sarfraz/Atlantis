@@ -1,4 +1,14 @@
-const BASE = '/api/admin'
+/** Backend origin, e.g. https://atlantisbackend.toolkitpro.cloud — empty = same-origin / Vite proxy */
+const API_ORIGIN = String(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const BASE = API_ORIGIN ? `${API_ORIGIN}/api/admin` : '/api/admin'
+
+/** Resolve relative upload paths against the API host when admin is on another domain */
+export function assetUrl(path?: string | null): string {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return API_ORIGIN ? `${API_ORIGIN}${normalized}` : normalized
+}
 
 function getToken(): string | null {
   return localStorage.getItem('serrano_admin_token')
@@ -132,6 +142,15 @@ export const availabilityApi = {
   bulkSet: (roomTypeId: string, data: { from: string; to: string; available: number }) => api.post(`/availability/${roomTypeId}/bulk`, data),
 }
 
+export const lodgifyApi = {
+  sync: () =>
+    api.post<{
+      success: boolean
+      availability: { ok: boolean; message: string; datesUpdated: number }
+      bookings: { ok: boolean; message: string; bookingsSynced: number }
+    }>('/sync/lodgify', {}),
+}
+
 // ─── Bookings ─────────────────────────────────────────────────────────────────
 export const bookingsApi = {
   list: (params?: BookingListParams) => {
@@ -142,6 +161,7 @@ export const bookingsApi = {
     if (params?.search) q.set('search', params.search)
     if (params?.from) q.set('from', params.from)
     if (params?.to) q.set('to', params.to)
+    if (params?.channels?.length) q.set('channels', params.channels.join(','))
     return api.get<BookingListResponse>(`/bookings?${q}`)
   },
   get: (id: string) => api.get<Booking>(`/bookings/${id}`),
@@ -207,10 +227,18 @@ export interface AvailabilityDay { date: string; available: number }
 export interface PromoCode { id: string; code: string; description?: string; discountType: string; discountValue: number; validFrom?: string; validTo?: string; maxUses?: number; usedCount: number; isActive: boolean; applicableToAll: boolean; roomTypes?: Array<{ roomType: { name: string } }> }
 export interface CurrencyRate { id: string; fromCurrency: string; toCurrency: string; rate: number; lastUpdated: string }
 export interface Guest { id: string; email: string; firstName: string; lastName: string; phone?: string; country?: string; city?: string; newsletter: boolean; createdAt: string; bookings?: Booking[]; _count?: { bookings: number } }
-export interface Booking { id: string; bookingRef: string; guestPrefix?: string; firstName: string; lastName: string; email: string; phone: string; country?: string; city?: string; status: string; totalAmount: number; currency: string; checkIn: string; checkOut: string; adults: number; children: number; roomsCount: number; createdAt: string; confirmedAt?: string; cancelledAt?: string; specialRequests?: string; items: BookingItem[]; promoCode?: PromoCode; guest?: Guest }
+export interface Booking { id: string; bookingRef: string; guestPrefix?: string; firstName: string; lastName: string; email: string; phone: string; country?: string; city?: string; status: string; totalAmount: number; currency: string; checkIn: string; checkOut: string; adults: number; children: number; roomsCount: number; createdAt: string; confirmedAt?: string; cancelledAt?: string; specialRequests?: string; lodgifySource?: string; channel?: string; items: BookingItem[]; promoCode?: PromoCode; guest?: Guest }
 export interface BookingItem { id: string; roomType: { name: string; category?: { name: string }; mainImage?: string; images?: RoomImage[] }; ratePlan: { name: string }; nightlyRate: number; nights: number; subtotal: number; serviceCharge: number; municipalityFee: number; vat: number; total: number }
 export interface HotelAlert { id: string; title: string; message: string; isActive: boolean; sortOrder: number }
 export interface DashboardData { stats: { totalBookings: number; confirmedBookings: number; pendingBookings: number; cancelledBookings: number; monthRevenue: number; totalRevenue: number; checkInsToday: number; checkOutsToday: number; totalGuests: number }; recentBookings: Booking[]; topRoomTypes: { roomTypeId: string; name: string; bookings: number; revenue: number }[]; revenueByDay: { date: string; revenue: number }[] }
-export interface BookingListParams { page?: number; limit?: number; status?: string; search?: string; from?: string; to?: string }
+export interface BookingListParams {
+  page?: number
+  limit?: number
+  status?: string
+  search?: string
+  from?: string
+  to?: string
+  channels?: string[]
+}
 export interface BookingListResponse { bookings: Booking[]; total: number; page: number; limit: number; pages: number }
 export interface GuestListResponse { guests: Guest[]; total: number; page: number; limit: number; pages: number }
