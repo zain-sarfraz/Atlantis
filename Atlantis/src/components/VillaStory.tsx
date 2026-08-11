@@ -1,120 +1,86 @@
-import ZoomableImage from './ZoomableImage'
+import { useState } from 'react'
+import ImageLightbox, { type LightboxImage } from './ImageLightbox'
 import { VILLA_DISPLAY_NAME } from '../utils/villa'
 
 const sections = [
   {
     image: '/villa/villa-entrance.jpg',
+    fullSrc: '/villa/lightbox-entrance.jpg',
     alt: `${VILLA_DISPLAY_NAME} wooden entrance gate`,
-    eyebrow: 'The arrival',
-    title: 'Behind the wooden gate',
-    body: 'Limiria Villa is a private home in Zanzibar — not a hotel corridor. Coral-stone walls and a thatched makuti roof frame the entrance. Once the gate closes, the entire villa is yours.',
-    points: [
-      'Entire villa reserved for your stay',
-      'Quiet, gated arrival',
-      'Traditional makuti architecture',
-    ],
+    label: 'The Arrival',
   },
   {
     image: '/villa/villa-poolside.jpg',
+    fullSrc: '/villa/lightbox-poolside.jpg',
     alt: `${VILLA_DISPLAY_NAME} private pool and thatched pavilion`,
-    eyebrow: 'Pool & pavilion',
-    title: 'Slow days by the water',
-    body: 'A private pool sits against white walls and a soaring thatched pavilion. Wooden deck, sun loungers, and floor-to-ceiling glass — open the doors and live between the water and the house.',
-    points: [
-      'Private swimming pool',
-      'Open-air lounge and outdoor dining',
-      'Light-filled interiors opening to the deck',
-    ],
+    label: 'Pool & Pavilion',
   },
   {
     image: '/villa/villa-dusk.webp',
+    fullSrc: '/villa/lightbox-dusk.jpg',
     alt: `${VILLA_DISPLAY_NAME} pool and villa at dusk`,
-    eyebrow: 'Evenings',
-    title: 'Golden hour by the pool',
-    body: 'As the light softens, the pool turns still and the house glows from within. Loungers on the deck, warm wood under the eaves, and the quiet of a private villa at the end of the day.',
-    points: [
-      'Infinity pool facing the horizon',
-      'Covered outdoor living after sunset',
-      'The whole house lit for you alone',
-    ],
+    label: 'Evenings',
   },
   {
     image: '/villa/villa-living.webp',
+    fullSrc: '/villa/lightbox-living.jpg',
     alt: `${VILLA_DISPLAY_NAME} living room and kitchen`,
-    eyebrow: 'Inside',
-    title: 'A home, not a hotel room',
-    body: 'Open living flows into a light kitchen — white sofa, pale wood, and quiet details. This is the villa as a house: space to gather, cook, and slow down between days by the water.',
-    points: [
-      'Open-plan living and dining',
-      'Fully equipped kitchen',
-      'Calm interiors in white and natural wood',
-    ],
+    label: 'Inside',
   },
 ] as const
 
-function StoryBlock({
-  image,
-  alt,
-  eyebrow,
-  title,
-  body,
-  points,
-}: (typeof sections)[number]) {
-  return (
-    <article className="max-w-3xl py-10">
-      <div className="overflow-hidden rounded-xl">
-        <ZoomableImage
-          src={image}
-          alt={alt}
-          className="aspect-video w-full"
-          loading="lazy"
-        />
-      </div>
-      <p className="type-label mt-5 text-sand-dark">{eyebrow}</p>
-      <h2 className="mt-2 text-2xl font-semibold leading-snug tracking-tight text-navy md:text-3xl">
-        {title}
-      </h2>
-      <p className="mt-4 text-base leading-relaxed text-ink">{body}</p>
-      <ul className="mt-5 space-y-2.5">
-        {points.map((point) => (
-          <li key={point} className="flex gap-2.5 text-base leading-relaxed text-ink">
-            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sand" aria-hidden />
-            {point}
-          </li>
-        ))}
-      </ul>
-    </article>
-  )
-}
-
-export function VillaVideo() {
-  return (
-    <div className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-      <div className="aspect-video w-full overflow-hidden rounded-xl bg-navy">
-        <video
-          className="h-full w-full object-cover object-center"
-          src="/villa/limiria-villa.mp4"
-          poster="/villa/villa-poolside.jpg"
-          autoPlay
-          muted
-          loop
-          playsInline
-          controls
-          preload="metadata"
-        >
-          Your browser does not support the video.
-        </video>
-      </div>
-    </div>
-  )
-}
+const galleryImages: LightboxImage[] = sections.map((s) => ({
+  src: s.image,
+  fullSrc: s.fullSrc,
+  alt: s.alt,
+}))
 
 export default function VillaStory() {
+  const [index, setIndex] = useState(0)
+  const [open, setOpen] = useState(false)
+
   return (
-    <section aria-label={`About ${VILLA_DISPLAY_NAME}`}>
-      {sections.map((block) => (
-        <StoryBlock key={block.image} {...block} />
-      ))}
+    <section
+      id="villa-gallery"
+      aria-label={`${VILLA_DISPLAY_NAME} gallery`}
+      className="w-full px-6 pb-16 sm:px-10 lg:px-14"
+    >
+      <div className="mx-auto grid max-w-[1400px] gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {sections.map((block, i) => (
+          <button
+            key={block.image}
+            type="button"
+            onClick={() => {
+              setIndex(i)
+              setOpen(true)
+            }}
+            className="group relative overflow-hidden rounded-2xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-sand"
+            aria-label={`View ${block.label} larger`}
+          >
+            <img
+              src={block.image}
+              alt={block.alt}
+              className="aspect-[16/10] w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+              loading="lazy"
+              draggable={false}
+            />
+            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-3.5 pt-12">
+              <span className="text-[0.8125rem] font-semibold tracking-wide text-white drop-shadow">
+                {block.label}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {open && (
+        <ImageLightbox
+          images={galleryImages}
+          index={index}
+          onIndexChange={setIndex}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </section>
   )
 }

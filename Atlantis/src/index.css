@@ -2,32 +2,32 @@
 @source "./admin/**/*.{js,ts,jsx,tsx}";
 
 @theme {
-  /* Limiria Villa — cream, sand taupe, warm earth */
-  --color-sand: #bca37f;
-  --color-sand-dark: #a89068;
+  /* Limiria Villa — cream + gold accent (logo / book CTA) */
+  --color-sand: #c8a265;
+  --color-sand-dark: #b8924f;
   --color-sand-light: #e8dfd0;
-  --color-navy: #5e544b;
-  --color-charcoal: #4a4238;
-  --color-cream: #faf7f2;
+  --color-navy: #2c2a26;
+  --color-charcoal: #3d3a35;
+  --color-cream: #f9f7f2;
   --color-cream-dark: #f2ede4;
-  --color-ink: #5e544b;
+  --color-ink: #3d3a35;
   --color-taupe: #8c8279;
   --color-muted: #8c8279;
-  --color-border: #d6d0c7;
+  --color-border: #ddd8cf;
   --color-slate-500: #8c8279;
   --color-slate-600: #6b635a;
-  --color-brand: #bca37f;
+  --color-brand: #c8a265;
 
   --font-sans: "Manrope", system-ui, sans-serif;
-  --font-serif: "Manrope", system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", "Times New Roman", serif;
 }
 
 :root {
-  --primary: #bca37f;
-  --navy: #5e544b;
-  --charcoal: #4a4238;
-  --ink: #5e544b;
-  --bg: #faf7f2;
+  --primary: #c8a265;
+  --navy: #2c2a26;
+  --charcoal: #3d3a35;
+  --ink: #3d3a35;
+  --bg: #f9f7f2;
 }
 
 * {
@@ -41,8 +41,10 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 1rem;
-  line-height: 1.625;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -62,10 +64,10 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-sans);
-  color: var(--navy);
-  letter-spacing: -0.01em;
-  line-height: 1.25;
+  font-family: var(--font-serif);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  font-weight: 600;
 }
 
 p {
@@ -87,7 +89,7 @@ button:focus-visible,
 a:focus-visible,
 select:focus-visible,
 input:focus-visible {
-  outline: 2px solid #bca37f;
+  outline: 2px solid #c8a265;
   outline-offset: 2px;
 }
 
@@ -95,20 +97,60 @@ input:focus-visible {
   width: 6px;
 }
 .drawer-scroll::-webkit-scrollbar-thumb {
-  background: #bca37f;
+  background: #c8a265;
   border-radius: 3px;
 }
 
+/* Eyebrow / UI labels */
 .type-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #8c8279;
 }
 
+/* Prices */
 .type-price {
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #2c2a26;
+}
+
+/* CTA / button text */
+.type-cta {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #5e544b;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Section eyebrows */
+.type-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Body copy */
+.type-body {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+}
+
+/* Small meta text */
+.type-meta {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.55;
 }
