@@ -65,29 +65,6 @@ export default function VillaCard({ room, rates }: VillaCardProps) {
             )
           })}
         </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1 md:col-span-2">
-          {sideImages.map((src, i) => (
-            <button
-              key={`m-${src}-${i}`}
-              type="button"
-              onClick={() => setActiveIdx(i)}
-              aria-label={`View photo ${i + 1}`}
-              aria-pressed={i === activeIdx}
-              className={`relative h-16 w-20 shrink-0 overflow-hidden rounded-md focus:ring-2 focus:ring-sand ${
-                i === activeIdx ? 'ring-2 ring-sand' : 'opacity-85'
-              }`}
-            >
-              <img
-                src={src}
-                alt=""
-                className="h-full w-full object-cover"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="px-5 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-5">

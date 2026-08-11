@@ -41,15 +41,15 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-[100] border-b border-border bg-cream text-ink">
+    <header className="sticky top-0 z-[100] border-b border-sand-dark bg-sand text-ink">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-        <Logo />
+        <Logo className="brightness-0 invert" />
 
         <div className="flex items-center gap-1 sm:gap-2">
           <select
             value={state.currency}
             onChange={(e) => setCurrency(e.target.value as Currency)}
-            className="rounded border border-border bg-cream px-2 py-1.5 text-sm text-taupe outline-none focus:border-sand focus:ring-2 focus:ring-sand"
+            className="rounded border border-sand-dark/60 bg-white/90 px-2 py-1.5 text-sm text-navy outline-none focus:border-navy focus:ring-2 focus:ring-navy/30"
             aria-label="Currency"
           >
             {currencies.map((c) => (
@@ -64,11 +64,11 @@ export default function Navbar() {
           <button
             type="button"
             onClick={() => toggleCart(true)}
-            className="relative rounded-lg p-2 text-taupe transition hover:bg-cream-dark hover:text-ink focus:ring-2 focus:ring-sand"
+            className="relative rounded-lg p-2 text-navy transition hover:bg-sand-dark hover:text-navy focus:ring-2 focus:ring-navy/40"
             aria-label="Cart"
           >
             <ShoppingBag size={20} />
-            <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-sand px-1 text-xs font-semibold text-navy">
+            <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-xs font-semibold text-navy">
               {cartCount}
             </span>
           </button>
@@ -78,7 +78,7 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setMenuOpen((o) => !o)}
-                className="flex items-center gap-1.5 rounded-lg border border-border bg-cream px-3 py-1.5 text-sm text-ink transition hover:bg-cream-dark focus:ring-2 focus:ring-sand"
+                className="flex items-center gap-1.5 rounded-lg border border-sand-dark/60 bg-white px-3 py-1.5 text-sm text-ink transition hover:bg-cream focus:ring-2 focus:ring-navy/30"
               >
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sand text-xs font-semibold text-navy">
                   {displayName.first[0]}
@@ -136,7 +136,7 @@ export default function Navbar() {
           ) : (
             <Link
               to="/login"
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-cream px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-cream-dark focus:ring-2 focus:ring-sand"
+              className="flex items-center gap-1.5 rounded-lg border border-sand-dark/60 bg-white px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-cream focus:ring-2 focus:ring-navy/30"
             >
               <User size={16} className="text-taupe" />
               <span className="hidden sm:block">Sign In</span>

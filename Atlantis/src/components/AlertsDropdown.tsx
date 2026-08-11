@@ -33,8 +33,8 @@ export default function AlertsDropdown() {
       <button
         type="button"
         onClick={() => toggleAlerts()}
-        className={`relative rounded-lg p-2 text-taupe transition hover:bg-cream-dark hover:text-ink focus:ring-2 focus:ring-sand ${
-          open ? 'bg-cream-dark text-ink ring-1 ring-sand/60' : ''
+        className={`relative rounded-lg p-2 text-navy transition hover:bg-sand-dark hover:text-navy focus:ring-2 focus:ring-navy/40 ${
+          open ? 'bg-sand-dark text-navy ring-1 ring-navy/20' : ''
         }`}
         aria-label="Notifications"
         aria-expanded={open}
@@ -42,7 +42,7 @@ export default function AlertsDropdown() {
       >
         <Bell size={20} />
         {active.length > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-sand px-1 text-[11px] font-semibold text-navy">
+          <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-semibold text-navy">
             {active.length > 9 ? '9+' : active.length}
           </span>
         )}

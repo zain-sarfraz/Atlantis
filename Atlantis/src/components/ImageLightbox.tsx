@@ -38,13 +38,17 @@ export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps)
       >
         <X size={22} />
       </button>
-      <img
-        src={src}
-        alt={alt}
-        className="max-h-[92vh] max-w-[96vw] cursor-default rounded-lg object-contain shadow-2xl"
+      <div
+        className="aspect-video w-[min(96vw,1400px)] overflow-hidden rounded-lg bg-charcoal shadow-2xl"
         onClick={(e) => e.stopPropagation()}
-        referrerPolicy="no-referrer"
-      />
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="h-full w-full cursor-default object-cover object-center"
+          referrerPolicy="no-referrer"
+        />
+      </div>
     </div>,
     document.body,
   )

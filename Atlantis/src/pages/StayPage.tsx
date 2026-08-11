@@ -3,6 +3,7 @@ import { useBooking } from '../context/BookingContext'
 import SearchBar from '../components/SearchBar'
 import VillaCard from '../components/VillaCard'
 import CartSidebar from '../components/CartSidebar'
+import VillaStory, { VillaVideo } from '../components/VillaStory'
 import { pickVillaRoom, VILLA_DISPLAY_NAME } from '../utils/villa'
 
 export default function StayPage() {
@@ -60,6 +61,8 @@ export default function StayPage() {
               ) : (
                 <VillaCard room={villa} rates={rates} />
               )}
+
+              <VillaStory />
             </section>
           </div>
 
@@ -68,6 +71,8 @@ export default function StayPage() {
           </div>
         </div>
       </div>
+
+      <VillaVideo />
     </>
   )
 }

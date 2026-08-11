@@ -3,6 +3,7 @@ import { BookingProvider } from './context/BookingContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AuthProvider as AdminAuthProvider, useAuth as useAdminAuth } from './admin/hooks/useAuth'
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import BookingSummary from './components/BookingSummary'
 import CartDrawer from './components/CartDrawer'
 import StayPage from './pages/StayPage'
@@ -24,9 +25,12 @@ import RatesPage from './admin/pages/RatesPage'
 
 function MainLayout() {
   return (
-    <div className="min-h-svh bg-cream">
+    <div className="flex min-h-svh flex-col bg-cream">
       <Navbar />
-      <Outlet />
+      <div className="flex-1">
+        <Outlet />
+      </div>
+      <Footer />
       <BookingSummary />
       <CartDrawer />
     </div>
