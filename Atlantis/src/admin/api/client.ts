@@ -85,14 +85,24 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
-  upload: <T>(path: string, form: FormData) =>
-    request<T>(path, { method: 'POST', body: form }),
+  get: <T>(path: string, signal?: AbortSignal) =>
+    request<T>(path, signal ? { signal } : {}),
+  post: <T>(path: string, body: unknown, signal?: AbortSignal) =>
+    request<T>(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    }),
+  put: <T>(path: string, body: unknown, signal?: AbortSignal) =>
+    request<T>(path, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    }),
+  delete: <T>(path: string, signal?: AbortSignal) =>
+    request<T>(path, { method: 'DELETE', ...(signal ? { signal } : {}) }),
+  upload: <T>(path: string, form: FormData, signal?: AbortSignal) =>
+    request<T>(path, { method: 'POST', body: form, ...(signal ? { signal } : {}) }),
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -141,17 +151,25 @@ export const availabilityApi = {
     api.get<AvailabilityDay[]>(`/availability/${roomTypeId}?month=${month}`),
   set: (roomTypeId: string, data: { date: string; available: number }) =>
     api.put(`/availability/${roomTypeId}`, data),
-  bulkSet: (roomTypeId: string, data: { from: string; to: string; available: number }) =>
-    api.post(`/availability/${roomTypeId}/bulk`, data),
+  bulkSet: (
+    roomTypeId: string,
+    data: {
+      from: string
+      to: string
+      available: number
+      blockReason?: 'booking' | 'closed'
+    },
+  ) => api.post(`/availability/${roomTypeId}/bulk`, data),
 }
 
 export const lodgifyApi = {
-  sync: () =>
+  /** Manual / auto Lodgify sync — capped at 60s so UI never hangs. */
+  sync: (signal?: AbortSignal) =>
     api.post<{
       success: boolean
       availability: { ok: boolean; message: string; datesUpdated: number }
       bookings: { ok: boolean; message: string; bookingsSynced: number }
-    }>('/sync/lodgify', {}),
+    }>('/sync/lodgify', {}, signal),
 }
 
 // ─── Bookings ─────────────────────────────────────────────────────────────────
@@ -249,7 +267,14 @@ export interface RoomImage { id: string; url: string; alt?: string; sortOrder: n
 export interface RoomAmenity { id: string; name: string; category: 'AMENITY' | 'PERK'; sortOrder: number }
 export interface RatePlan { id: string; roomTypeId: string; name: string; description?: string; basePrice: number; isActive: boolean }
 export interface PriceOverride { id: string; ratePlanId: string; date: string; price: number }
-export interface AvailabilityDay { date: string; available: number }
+export interface AvailabilityDay {
+  date: string
+  available: number
+  /** open | booked | closed — from Lodgify sync + local reservations */
+  reason?: 'open' | 'booked' | 'closed'
+  guestName?: string | null
+  bookingRef?: string | null
+}
 export interface PromoCode { id: string; code: string; description?: string; discountType: string; discountValue: number; validFrom?: string; validTo?: string; maxUses?: number; usedCount: number; isActive: boolean; applicableToAll: boolean; roomTypes?: Array<{ roomType: { name: string } }> }
 export interface CurrencyRate { id: string; fromCurrency: string; toCurrency: string; rate: number; lastUpdated: string }
 export interface Guest { id: string; email: string; firstName: string; lastName: string; phone?: string; country?: string; city?: string; newsletter: boolean; createdAt: string; bookings?: Booking[]; _count?: { bookings: number } }
@@ -266,7 +291,20 @@ export interface BookingListParams {
   to?: string
   channels?: string[]
 }
-export interface BookingListResponse { bookings: Booking[]; total: number; page: number; limit: number; pages: number }
+export interface BookingListCounts {
+  all: number
+  confirmed: number
+  tentative: number
+  declined: number
+}
+export interface BookingListResponse {
+  bookings: Booking[]
+  total: number
+  page: number
+  limit: number
+  pages: number
+  counts?: BookingListCounts
+}
 export interface GuestListResponse { guests: Guest[]; total: number; page: number; limit: number; pages: number }
 export type CurrencyCode = 'AED' | 'USD' | 'EUR' | 'GBP'
 export type CurrencyPreview = Record<CurrencyCode, number>

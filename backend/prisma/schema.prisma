@@ -53,6 +53,13 @@ enum BookingStatus {
   NO_SHOW
 }
 
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+  FAILED
+}
+
 enum AdminRole {
   SUPER_ADMIN
   RESERVATIONS_MANAGER
@@ -188,6 +195,8 @@ model Availability {
   roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
   date       DateTime @db.Date
   available  Int      @default(1)
+  /// Why the day is blocked when available=0: booking | closed | null (open/unknown)
+  blockReason String? @db.VarChar(20)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -273,6 +282,9 @@ model Booking {
   lodgifyBookingId String?      @unique @db.VarChar(50)
   /// Channel source when synced from Lodgify (e.g. Airbnb, Booking.com, Direct)
   lodgifySource   String?       @db.VarChar(100)
+  /// Stripe payment intent ID
+  stripePaymentIntentId String? @db.VarChar(255)
+  paymentStatus   PaymentStatus @default(UNPAID)
   confirmedAt     DateTime?
   cancelledAt     DateTime?
   createdAt       DateTime      @default(now())
@@ -361,4 +373,14 @@ model LodgifyBooking {
   @@index([propertyId])
   @@index([status])
   @@index([receivedAt])
+}
+
+/// Admin-deleted Lodgify bookings — sync/webhooks must not re-import these IDs.
+model LodgifyBookingExclusion {
+  id               String   @id @default(cuid())
+  lodgifyBookingId String   @unique @db.VarChar(50)
+  bookingRef       String?  @db.VarChar(20)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
 }

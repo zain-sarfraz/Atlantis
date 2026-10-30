@@ -17,26 +17,21 @@ function buildCalendarPrices(): Record<
   const end = new Date(2026, 8, 30) // Sep 30
 
   const unavailable = new Set([
-    '2026-07-25',
-    '2026-07-26',
-    '2026-08-10',
-    '2026-08-11',
-    '2026-09-05',
+    // Aug 3 - Aug 8 (Wei Wei)
+    '2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07',
+    // Aug 21 - Aug 28 (Gianmarco Bruno)
+    '2026-08-21', '2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27',
+    // Aug 28 - Aug 31 (Simeon Monga)
+    '2026-08-28', '2026-08-29', '2026-08-30',
+    // Sept 3 (tiesting .)
+    '2026-09-03',
   ])
 
   const cursor = new Date(start)
   while (cursor <= end) {
     const key = formatKey(cursor)
-    const day = cursor.getDay()
-    const weekend = day === 5 || day === 6 // Fri/Sat peak
-    const base = 980
-    const seasonal =
-      cursor.getMonth() === 7 ? 180 : cursor.getMonth() === 8 ? 80 : 120
-    const wave = Math.round(Math.sin(cursor.getDate() / 3) * 60)
-    const price = base + seasonal + (weekend ? 220 : 0) + wave
-
     prices[key] = {
-      price: Math.max(850, price),
+      price: 1396, // Consistent base nightly rate ($380 USD)
       available: !unavailable.has(key),
     }
     cursor.setDate(cursor.getDate() + 1)
@@ -47,14 +42,19 @@ function buildCalendarPrices(): Record<
 
 export const calendarPrices = buildCalendarPrices()
 
-export function getDatePrice(date: Date): number | null {
+const DEFAULT_NIGHTLY_AED = 1396 // Consistent base nightly rate ($380 USD)
+
+export function getDatePrice(date: Date): number {
   const entry = calendarPrices[formatKey(date)]
-  return entry?.available ? entry.price : null
+  if (entry && entry.price) {
+    return entry.price
+  }
+  return DEFAULT_NIGHTLY_AED
 }
 
 export function isDateAvailable(date: Date): boolean {
   const entry = calendarPrices[formatKey(date)]
-  if (!entry) return false
+  if (!entry) return true
   return entry.available
 }
 

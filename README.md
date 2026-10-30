@@ -4,9 +4,8 @@
 
 ```
 Atlantis/
-├── Atlantis/        ← Frontend (React + Vite + TypeScript + Tailwind)
-├── backend/         ← REST API (Node.js + Express + Prisma + PostgreSQL)
-└── admin/           ← Admin Panel (React + Vite + TypeScript + Tailwind)
+├── Atlantis/        ← Frontend + Admin Panel (React + Vite + TypeScript + Tailwind)
+└── backend/         ← REST API (Node.js + Express + Prisma + MySQL)
 ```
 
 ---
@@ -41,20 +40,13 @@ npm run dev             # Start backend on port 3001
 | Reservations Manager | reservations@serrano.hotel | Manager@1234 |
 | Content Editor | content@serrano.hotel | Editor@1234 |
 
-### 3. Start Admin Panel
-
-```bash
-cd admin
-npm install
-npm run dev   # Starts on http://localhost:5174
-```
-
-### 4. Start Frontend
+### 3. Start Frontend (+ Admin)
 
 ```bash
 cd Atlantis
 npm install
 npm run dev   # Starts on http://localhost:5173
+# Admin panel: http://localhost:5173/admin
 ```
 
 ---

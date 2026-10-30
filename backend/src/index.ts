@@ -72,33 +72,25 @@ app.use(errorHandler)
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 async function start() {
-  try {
-    await prisma.$connect()
-    console.log('✓ Database connected')
+  app.listen(env.port, async () => {
+    console.log(`✓ Serrano Backend running on http://localhost:${env.port}`)
+    console.log(`  API:   http://localhost:${env.port}/api`)
+    console.log(`  Admin: http://localhost:${env.port}/api/admin`)
+    console.log(`  Env:   ${env.nodeEnv}`)
 
-    app.listen(env.port, () => {
-      console.log(`✓ Serrano Backend running on http://localhost:${env.port}`)
-      console.log(`  API:   http://localhost:${env.port}/api`)
-      console.log(`  Admin: http://localhost:${env.port}/api/admin`)
-      console.log(`  Env:   ${env.nodeEnv}`)
-      console.log('')
-      console.log(
-        `To receive Lodgify webhooks locally, run 'ngrok http ${env.port}' in a separate terminal ` +
-          `(or: npm run ngrok), then set the ngrok URL + /api/webhooks/lodgify as the webhook URL ` +
-          'in Lodgify Dashboard > Settings > Webhooks (or Integrations).',
-      )
-      console.log(`  Example: https://xxxx.ngrok-free.app/api/webhooks/lodgify`)
-      console.log('')
-      try {
-        startLodgifyCron()
-      } catch (cronErr) {
-        console.error('⚠ Lodgify cron failed to start (app continues):', cronErr)
-      }
-    })
-  } catch (err) {
-    console.error('Failed to start:', err)
-    process.exit(1)
-  }
+    try {
+      await prisma.$connect()
+      console.log('✓ Database connected')
+    } catch (err) {
+      console.error('⚠ Database connection error (server active):', (err as Error).message)
+    }
+
+    try {
+      startLodgifyCron()
+    } catch (cronErr) {
+      console.error('⚠ Lodgify cron failed to start (app continues):', cronErr)
+    }
+  })
 }
 
 start()
@@ -107,3 +99,4 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect()
   process.exit(0)
 })
+// Updated: 2026-08-22 15:40:00

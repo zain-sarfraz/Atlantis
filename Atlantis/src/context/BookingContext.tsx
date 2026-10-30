@@ -83,7 +83,7 @@ type Action =
   | { type: 'SET_CART_ERROR'; error: string }
   | { type: 'SET_HOTEL_ALERTS'; alerts: Array<{ id: string; title: string; message: string }> }
 
-const today = new Date(2026, 7, 10) // Aug 10, 2026
+const today = new Date(2026, 7, 1) // Aug 1, 2026
 /** First open Limiria night from Lodgify availability */
 const defaultCheckIn = new Date(2026, 7, 18) // Aug 18
 const defaultCheckOut = new Date(2026, 7, 20) // Aug 20
@@ -124,7 +124,7 @@ const initialState: BookingState = {
   checkIn: defaultCheckIn,
   checkOut: defaultCheckOut,
   promoCode: '',
-  currency: 'AED',
+  currency: 'USD',
   cart: [],
   bookings: [],
   sort: 'lowest',
@@ -152,8 +152,31 @@ function reducer(state: BookingState, action: Action): BookingState {
   switch (action.type) {
     case 'SET_GUESTS':
       return { ...state, guests: { ...state.guests, ...action.guests } }
-    case 'SET_DATES':
-      return { ...state, checkIn: action.checkIn, checkOut: action.checkOut, cartError: '' }
+    case 'SET_DATES': {
+      const checkIn = action.checkIn
+      const checkOut = action.checkOut
+      let cart = state.cart
+      if (checkIn && checkOut) {
+        const nightsCount = nightsBetween(checkIn, checkOut)
+        const breakdown = computeBreakdown(1396, nightsCount)
+        const defaultCartItem: CartItem = {
+          id: `limiria-villa-stay`,
+          roomId: 'cmt481dng000ysgh0ofqxz748',
+          roomName: 'Limiria Villa Zanzibar',
+          categoryName: 'Private Villa',
+          ratePlanId: 'cmt481dnn001hsgh0ugjr0ap2',
+          ratePlanName: 'Best Available Rate',
+          image: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&q=80',
+          nightlyRate: 1396,
+          checkIn: toISODate(checkIn),
+          checkOut: toISODate(checkOut),
+          nights: nightsCount,
+          breakdown,
+        }
+        cart = [defaultCartItem]
+      }
+      return { ...state, checkIn, checkOut, cart, cartError: '' }
+    }
     case 'SET_PROMO':
       return { ...state, promoCode: action.code }
     case 'SET_CURRENCY':

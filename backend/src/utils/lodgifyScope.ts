@@ -1,7 +1,10 @@
 import type { Prisma } from '@prisma/client'
 import { env } from '../config/env'
 
-/** Prisma filter: bookings belonging to LODGIFY_PROPERTY_ID (via room type mapping). */
+/**
+ * Prisma filter: only bookings for LODGIFY_PROPERTY_ID (Limiria Villa = 714507).
+ * Requires a booking item mapped to that Lodgify property — no null/empty leakage.
+ */
 export function scopedBookingWhere(
   extra: Prisma.BookingWhereInput = {},
 ): Prisma.BookingWhereInput {
@@ -28,7 +31,9 @@ export function scopedBookingItemWhere(
   return {
     AND: [
       extra,
-      { roomType: { lodgifyPropertyId: env.lodgifyPropertyId } },
+      {
+        roomType: { lodgifyPropertyId: env.lodgifyPropertyId },
+      },
     ],
   }
 }

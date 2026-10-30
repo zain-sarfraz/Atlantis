@@ -7,6 +7,19 @@ async function main() {
   console.log('🌱 Seeding Serrano database...')
 
   // ─── Admin Users ──────────────────────────────────────────────────────────
+  const adminComPassword = await bcrypt.hash('11223344', 12)
+  await prisma.adminUser.upsert({
+    where: { email: 'admin@admin.com' },
+    update: { password: adminComPassword },
+    create: {
+      email: 'admin@admin.com',
+      password: adminComPassword,
+      firstName: 'Admin',
+      lastName: 'User',
+      role: AdminRole.SUPER_ADMIN,
+    },
+  })
+
   const superAdminPassword = await bcrypt.hash('Admin@1234', 12)
   const superAdmin = await prisma.adminUser.upsert({
     where: { email: 'admin@serrano.hotel' },
@@ -391,7 +404,7 @@ async function main() {
 
   // ─── Demo Guest ───────────────────────────────────────────────────────────
   const guestPassword = await bcrypt.hash('Guest@1234', 12)
-  await prisma.guest.upsert({
+  const guest = await prisma.guest.upsert({
     where: { email: 'guest@serrano.hotel' },
     update: {},
     create: {
@@ -405,6 +418,8 @@ async function main() {
     },
   })
   console.log('✓ Demo guest created')
+
+
 
   console.log('')
   console.log('🎉 Seed complete!')

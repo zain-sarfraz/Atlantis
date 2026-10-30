@@ -104,9 +104,17 @@ export interface CreateBookingPayload {
   zipCode?: string
   specialRequests?: string
   newsletter?: boolean
+  paymentIntentId?: string
+  paymentStatus?: string
 }
 
 export const hotelApi = {
+  createPaymentIntent: (payload: { amount: number; currency: string; email?: string; bookingRef?: string }) =>
+    request<{ clientSecret: string; paymentIntentId: string; isMock?: boolean; message?: string }>(
+      '/payments/create-payment-intent',
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+
   search: (params: SearchParams): Promise<SearchResponse> => {
     const q = new URLSearchParams()
     Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)) })
@@ -114,6 +122,13 @@ export const hotelApi = {
   },
 
   getAlerts: () => request<Array<{ id: string; title: string; message: string; isActive?: boolean }>>('/alerts'),
+
+  getBlockedDates: () =>
+    request<{
+      blockedDates: string[]
+      bookedDates?: string[]
+      closedDates?: string[]
+    }>('/availability/blocked-dates'),
 
   getCurrency: () => request<{ base: string; rates: Record<string, number> }>('/currency'),
 
@@ -132,4 +147,9 @@ export const hotelApi = {
   getBooking: (ref: string) => request<unknown>(`/bookings/${ref}`),
 
   getGuestBookings: (email: string) => request<unknown[]>(`/bookings/guest/${encodeURIComponent(email)}`),
+
+  cancelBooking: (ref: string) =>
+    request<{ message: string; booking: unknown }>(`/bookings/${encodeURIComponent(ref)}/cancel`, {
+      method: 'POST',
+    }),
 }

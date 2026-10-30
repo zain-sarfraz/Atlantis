@@ -46,26 +46,29 @@ export function computeBreakdown(
 /** Convert AED amount into selected currency using live admin rates */
 export function convertAmount(aed: number, currency: Currency): number {
   const raw = aed * getCurrencyRate(currency)
-  if (currency === 'AED') return Math.round(raw)
-  return Math.round(raw * 100) / 100
+  return Math.round(raw)
 }
 
 /**
- * Format a money amount already denominated in `currency`
- * (search API returns converted rates — do not convert again).
+ * Format a money amount. By default converts AED base amount into target currency.
  * AED: whole numbers; USD/EUR/GBP: 2 decimals.
  */
-export function formatMoney(amount: number, currency: Currency): string {
+export function formatMoney(
+  amount: number,
+  currency: Currency,
+  convertFromAed = true,
+): string {
+  const finalAmount = convertFromAed ? convertAmount(amount, currency) : amount
   try {
     return new Intl.NumberFormat('en', {
       style: 'currency',
       currency,
       minimumFractionDigits: currency === 'AED' ? 0 : 2,
       maximumFractionDigits: currency === 'AED' ? 0 : 2,
-    }).format(amount)
+    }).format(finalAmount)
   } catch {
     const symbol = CURRENCY_SYMBOLS[currency] ?? currency
-    const n = currency === 'AED' ? Math.round(amount) : Math.round(amount * 100) / 100
+    const n = currency === 'AED' ? Math.round(finalAmount) : Math.round(finalAmount * 100) / 100
     return `${symbol} ${n.toLocaleString()}`
   }
 }

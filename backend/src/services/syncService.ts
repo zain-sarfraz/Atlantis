@@ -5,15 +5,18 @@ import { normalizeLodgifyChannel } from '../utils/lodgifyChannels'
 import { parseDate } from '../utils/pricing'
 import {
   extractBookingAmount,
+  extractBookingCurrency,
   extractBookingDates,
   extractBookingId,
   extractBookingPropertyId,
   extractBookingRoomTypeId,
   extractBookingStatus,
   getAvailability,
+  getBookingById,
   getBookings,
   getRates,
 } from './lodgifyService'
+import { isLodgifyBookingExcluded } from './lodgifyExclusion.service'
 
 export type SyncResult = {
   ok: boolean
@@ -50,11 +53,14 @@ function isValidIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !value.startsWith('0001-')
 }
 
+/** Availability window: 2 months back + 18 months ahead (covers full seasons e.g. November). */
 function defaultSyncWindow(): { start: string; end: string } {
   const start = new Date()
   start.setUTCHours(0, 0, 0, 0)
-  const end = new Date(start)
-  end.setUTCDate(end.getUTCDate() + 180)
+  start.setUTCMonth(start.getUTCMonth() - 2)
+  const end = new Date()
+  end.setUTCHours(0, 0, 0, 0)
+  end.setUTCMonth(end.getUTCMonth() + 18)
   return {
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10),
@@ -98,7 +104,7 @@ export async function syncAvailabilityFromLodgify(): Promise<SyncResult> {
     include: {
       ratePlans: { where: { isActive: true }, orderBy: { createdAt: 'asc' }, take: 1 },
     },
-  })
+  }).catch(() => [])
 
   if (mappedRooms.length === 0) {
     result.message =
@@ -135,37 +141,69 @@ export async function syncAvailabilityFromLodgify(): Promise<SyncResult> {
         }
         periods = periods ?? []
 
+        // Lodgify source of truth for open/closed:
+        // - bookings → unavailable (0), blockReason=booking (calendar can show guest name)
+        // - closed_period ("Closed by you") → unavailable (0), blockReason=closed
+        // - available > 0 → open (1)
+        const dayAvail = new Map<string, { available: number; blockReason: string | null }>()
+
         for (const period of periods) {
           const startIso = period.start.slice(0, 10)
           const endIso = period.end.slice(0, 10)
           if (!isValidIsoDate(startIso) || !isValidIsoDate(endIso)) continue
 
-          const periodStart = parseDate(startIso)
-          const periodEnd = parseDate(endIso)
-          // Lodgify villa inventory is 0 or 1 unit
-          const availableCount = period.available > 0 ? 1 : 0
-          const dates = eachDayInclusive(periodStart, periodEnd)
-
+          const dates = eachDayInclusive(parseDate(startIso), parseDate(endIso))
           for (const dateStr of dates) {
-            // Only touch dates inside our sync window
             if (dateStr < start || dateStr >= end) continue
-            const date = parseDate(dateStr)
-            await prisma.availability.upsert({
-              where: { roomTypeId_date: { roomTypeId: room.id, date } },
-              update: { available: availableCount },
-              create: { roomTypeId: room.id, date, available: availableCount },
-            })
-            result.datesUpdated += 1
+
+            let availableCount = 0
+            let blockReason: string | null = 'closed'
+            if (period.hasBookings) {
+              availableCount = 0
+              blockReason = 'booking'
+            } else if (period.hasClosedPeriod) {
+              availableCount = 0
+              blockReason = 'closed'
+            } else if (period.available > 0) {
+              availableCount = 1
+              blockReason = null
+            } else {
+              availableCount = 0
+              blockReason = 'closed'
+            }
+
+            const prev = dayAvail.get(dateStr)
+            // Booking wins over closed/open so guest labels stay attached
+            if (!prev || prev.blockReason !== 'booking') {
+              dayAvail.set(dateStr, { available: availableCount, blockReason })
+            } else if (blockReason === 'booking') {
+              dayAvail.set(dateStr, { available: 0, blockReason: 'booking' })
+            }
           }
         }
 
-        // Best-effort rate sync onto the room's primary rate plan
+        for (const [dateStr, day] of dayAvail) {
+          const date = parseDate(dateStr)
+          await prisma.availability.upsert({
+            where: { roomTypeId_date: { roomTypeId: room.id, date } },
+            update: { available: day.available, blockReason: day.blockReason },
+            create: {
+              roomTypeId: room.id,
+              date,
+              available: day.available,
+              blockReason: day.blockReason,
+            },
+          })
+          result.datesUpdated += 1
+        }
+
+        // Still sync nightly rates for pricing (does not reopen closed days)
         const primaryPlan = room.ratePlans[0]
         if (primaryPlan) {
           try {
             const ratesRaw = await getRates(propertyId, start, end, roomTypeIdLodgify)
-            const daily = parseDailyRates(ratesRaw)
-            for (const [dateStr, price] of daily) {
+            const dailyRates = parseDailyRates(ratesRaw)
+            for (const [dateStr, price] of dailyRates) {
               if (dateStr < start || dateStr >= end) continue
               if (!Number.isFinite(price) || price <= 0) continue
               const date = parseDate(dateStr)
@@ -224,7 +262,7 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
       ...lodgifyPropertyFilter(),
       lodgifyRoomTypeId: { not: null },
     },
-  })
+  }).catch(() => [])
 
   if (mappedRooms.length === 0) {
     result.message =
@@ -249,16 +287,69 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
 
   for (const propertyId of propertyIds) {
     try {
-      // Fetch all bookings (including historic) so past reservations are imported into the dashboard
+      // Fetch all bookings (including historic). Filter is client-side (Lodgify propertyId param is unreliable).
       const bookings = await getBookings(propertyId, { stayFilter: 'All' })
-      const fetchedCount = Array.isArray(bookings) ? bookings.length : 0
-      console.log(`[Lodgify sync] property ${propertyId}: fetched ${fetchedCount} bookings (stayFilter=All)`)
+      const byId = new Map<string, unknown>()
+      for (const booking of bookings) {
+        const id = extractBookingId(booking)
+        if (id) byId.set(id, booking)
+      }
+
+      // Also pull booking IDs from the property availability calendar (source of truth for blocked stays)
+      // and fetch any missing reservation details by id.
+      try {
+        const start = new Date()
+        start.setUTCDate(1)
+        start.setUTCMonth(start.getUTCMonth() - 6)
+        const end = new Date()
+        end.setUTCFullYear(end.getUTCFullYear() + 2)
+        const startStr = start.toISOString().slice(0, 10)
+        const endStr = end.toISOString().slice(0, 10)
+        const availabilityRaw = await getAvailability(propertyId, startStr, endStr)
+        const calendarIds = extractBookingIdsFromAvailability(availabilityRaw)
+        let hydrated = 0
+        for (const calendarId of calendarIds) {
+          if (byId.has(calendarId)) continue
+          try {
+            const detail = await getBookingById(calendarId)
+            const detailProp = extractBookingPropertyId(detail)
+            if (detailProp != null && String(detailProp) !== String(propertyId)) continue
+            byId.set(calendarId, detail)
+            hydrated += 1
+          } catch (hydrateErr) {
+            console.warn(
+              `[Lodgify sync] property ${propertyId}: could not hydrate calendar booking ${calendarId}:`,
+              hydrateErr instanceof Error ? hydrateErr.message : hydrateErr,
+            )
+          }
+        }
+        if (hydrated > 0) {
+          console.log(
+            `[Lodgify sync] property ${propertyId}: hydrated ${hydrated} bookings from availability calendar`,
+          )
+        }
+      } catch (calErr) {
+        console.warn(
+          `[Lodgify sync] property ${propertyId}: availability calendar enrichment failed:`,
+          calErr instanceof Error ? calErr.message : calErr,
+        )
+      }
+
+      const mergedBookings = [...byId.values()]
+      console.log(
+        `[Lodgify sync] property ${propertyId}: fetched ${mergedBookings.length} bookings (list+calendar)`,
+      )
       result.roomsProcessed += 1
 
-      for (const booking of bookings) {
+      for (const booking of mergedBookings) {
         const lodgifyId = extractBookingId(booking)
         if (!lodgifyId) {
           console.log('[Lodgify sync] skipping booking without id', booking)
+          continue
+        }
+
+        if (await isLodgifyBookingExcluded(lodgifyId)) {
+          console.log(`[Lodgify sync] ${lodgifyId}: skipped (admin-deleted / excluded)`)
           continue
         }
 
@@ -311,37 +402,66 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
         const guest = extractGuest(booking)
         const source = extractSource(booking)
         const totalAmount = extractBookingAmount(booking)
+        const currency = extractBookingCurrency(booking, 'USD')
         const lodgifyRoomName = extractLodgifyRoomName(booking)
+        const isCancelledBooking = cancelledStatuses.has(status)
+        const isTentative = status === 'tentative'
+        const mappedStatus = isCancelledBooking
+          ? 'CANCELLED'
+          : isTentative
+            ? 'PENDING'
+            : 'CONFIRMED'
+        const notes = source
+          ? `Synced from Lodgify (${source}${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''})`
+          : `Synced from Lodgify${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''}`
 
         const existing = await prisma.booking.findUnique({ where: { lodgifyBookingId: lodgifyId } })
         if (existing) {
-          // Already synced — update dates if changed, otherwise skip (idempotent)
           const sameDates =
             existing.checkIn.toISOString().slice(0, 10) === dates.arrival &&
             existing.checkOut.toISOString().slice(0, 10) === dates.departure
+
           if (!sameDates) {
-            // Release old, block new
             for (const item of await prisma.bookingItem.findMany({ where: { bookingId: existing.id } })) {
               await releaseDates(item.roomTypeId, existing.checkIn, existing.checkOut)
-              await blockDates(item.roomTypeId, checkIn, checkOut)
+              if (!isCancelledBooking) {
+                await blockDates(item.roomTypeId, checkIn, checkOut)
+              }
             }
-            await prisma.booking.update({
-              where: { id: existing.id },
-              data: {
-                checkIn,
-                checkOut,
-                lodgifySource: source ?? existing.lodgifySource,
-                specialRequests: source
-                  ? `Synced from Lodgify (${source}${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''})`
-                  : `Synced from Lodgify${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''}`,
-              },
-            })
-            result.bookingsSynced += 1
             result.datesUpdated += 1
-            console.log(`[Lodgify sync] ${lodgifyId}: updated existing booking ${existing.id} (dates changed)`)
-          } else {
-            console.log(`[Lodgify sync] ${lodgifyId}: skipped (already exists with same dates, local id=${existing.id})`)
+          } else if (existing.status !== 'CANCELLED' && isCancelledBooking) {
+            for (const item of await prisma.bookingItem.findMany({ where: { bookingId: existing.id } })) {
+              await releaseDates(item.roomTypeId, existing.checkIn, existing.checkOut)
+            }
+            result.datesUpdated += 1
+          } else if (existing.status === 'CANCELLED' && !isCancelledBooking) {
+            await blockDates(localRoom.id, checkIn, checkOut)
+            result.datesUpdated += 1
           }
+
+          await prisma.booking.update({
+            where: { id: existing.id },
+            data: {
+              checkIn,
+              checkOut,
+              status: mappedStatus,
+              totalAmount,
+              currency,
+              lodgifySource: source ?? existing.lodgifySource,
+              firstName: guest.firstName,
+              lastName: guest.lastName,
+              email: guest.email,
+              phone: guest.phone,
+              adults: guest.adults,
+              children: guest.children,
+              specialRequests: notes,
+              confirmedAt:
+                mappedStatus === 'CONFIRMED' ? existing.confirmedAt ?? new Date() : existing.confirmedAt,
+              cancelledAt: mappedStatus === 'CANCELLED' ? existing.cancelledAt ?? new Date() : null,
+            },
+          })
+          result.bookingsSynced += 1
+          console.log(`[Lodgify sync] ${lodgifyId}: refreshed existing booking ${existing.id}`)
           continue
         }
 
@@ -350,8 +470,6 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
           where: { roomTypeId: localRoom.id, isActive: true },
           orderBy: { createdAt: 'asc' },
         })
-
-        const isCancelledBooking = cancelledStatuses.has(status)
 
         // For non-cancelled bookings, always block dates (idempotent). For cancelled bookings, do not block.
         if (!isCancelledBooking) {
@@ -391,8 +509,8 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
             bookingRef,
             lodgifyBookingId: lodgifyId,
             lodgifySource: source,
-            currency: 'AED',
-            status: isCancelledBooking ? 'CANCELLED' : 'CONFIRMED',
+            currency,
+            status: mappedStatus,
             totalAmount,
             checkIn,
             checkOut,
@@ -403,10 +521,9 @@ export async function syncBookingsFromLodgify(): Promise<SyncResult> {
             lastName: guest.lastName,
             email: guest.email,
             phone: guest.phone,
-            specialRequests: source
-              ? `Synced from Lodgify (${source}${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''})`
-              : `Synced from Lodgify${lodgifyRoomName ? ` | ${lodgifyRoomName}` : ''}`,
-            confirmedAt: new Date(),
+            specialRequests: notes,
+            confirmedAt: mappedStatus === 'CONFIRMED' ? new Date() : null,
+            cancelledAt: mappedStatus === 'CANCELLED' ? new Date() : null,
             items: {
               create: {
                 roomTypeId: localRoom.id,
@@ -450,21 +567,8 @@ export async function runLodgifySync(): Promise<{
   let availability: SyncResult
   let bookings: SyncResult
 
-  try {
-    availability = await syncAvailabilityFromLodgify()
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('[Lodgify sync] availability crashed:', msg)
-    availability = {
-      ok: false,
-      message: msg,
-      roomsProcessed: 0,
-      datesUpdated: 0,
-      bookingsSynced: 0,
-      errors: [msg],
-    }
-  }
-
+  // Bookings first (import/update reservations), then availability last so
+  // Lodgify closed_period + booking blocks are the final inventory truth.
   try {
     bookings = await syncBookingsFromLodgify()
   } catch (err) {
@@ -480,12 +584,65 @@ export async function runLodgifySync(): Promise<{
     }
   }
 
+  try {
+    availability = await syncAvailabilityFromLodgify()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[Lodgify sync] availability crashed:', msg)
+    availability = {
+      ok: false,
+      message: msg,
+      roomsProcessed: 0,
+      datesUpdated: 0,
+      bookingsSynced: 0,
+      errors: [msg],
+    }
+  }
+
   return { availability, bookings }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-type AvailPeriod = { start: string; end: string; available: number }
+/** Collect Lodgify booking IDs embedded in availability calendar periods. */
+function extractBookingIdsFromAvailability(raw: unknown): string[] {
+  const ids = new Set<string>()
+
+  const visit = (node: unknown) => {
+    if (!node) return
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item)
+      return
+    }
+    if (typeof node !== 'object') return
+    const obj = node as Record<string, unknown>
+    const bookings = obj.bookings
+    if (Array.isArray(bookings)) {
+      for (const b of bookings) {
+        if (b && typeof b === 'object') {
+          const id = (b as Record<string, unknown>).id
+          if (id != null) ids.add(String(id))
+        } else if (typeof b === 'number' || typeof b === 'string') {
+          ids.add(String(b))
+        }
+      }
+    }
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object') visit(value)
+    }
+  }
+
+  visit(raw)
+  return [...ids]
+}
+
+type AvailPeriod = {
+  start: string
+  end: string
+  available: number
+  hasBookings: boolean
+  hasClosedPeriod: boolean
+}
 
 function parseAvailabilityPeriods(raw: unknown): Map<number, AvailPeriod[]> {
   const map = new Map<number, AvailPeriod[]>()
@@ -497,8 +654,8 @@ function parseAvailabilityPeriods(raw: unknown): Map<number, AvailPeriod[]> {
   }
 
   const normalizePeriod = (p: Record<string, unknown>): AvailPeriod | null => {
-    const start = String(p.start ?? p.from ?? p.date_from ?? '')
-    const end = String(p.end ?? p.to ?? p.date_to ?? '')
+    const start = String(p.start ?? p.from ?? p.date_from ?? p.period_start ?? '')
+    const end = String(p.end ?? p.to ?? p.date_to ?? p.period_end ?? '')
     if (!start || !end) return null
     const availableRaw = p.available ?? p.availability ?? p.units ?? 0
     const available =
@@ -507,7 +664,22 @@ function parseAvailabilityPeriods(raw: unknown): Map<number, AvailPeriod[]> {
           ? 1
           : 0
         : Number(availableRaw)
-    return { start, end, available: Number.isFinite(available) ? available : 0 }
+    const bookings = p.bookings ?? p.booking_ids ?? p.bookingIds
+    const hasBookings = Array.isArray(bookings) && bookings.length > 0
+    const closed = p.closed_period ?? p.closed_period_id ?? p.closedPeriodId
+    const hasClosedPeriod =
+      closed != null &&
+      closed !== false &&
+      closed !== 0 &&
+      closed !== '0' &&
+      !(typeof closed === 'object' && closed !== null && Object.keys(closed as object).length === 0)
+    return {
+      start,
+      end,
+      available: Number.isFinite(available) ? available : 0,
+      hasBookings,
+      hasClosedPeriod,
+    }
   }
 
   // Shape A: single object with periods + room_type_id
@@ -572,7 +744,18 @@ function parseDailyRates(raw: unknown): Map<string, number> {
 
   const ingest = (dateStr: string, price: number) => {
     const d = dateStr.slice(0, 10)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(price)) map.set(d, price)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(price) && price > 0) {
+      map.set(d, price)
+    }
+  }
+
+  const priceFromPricesArray = (prices: unknown): number | null => {
+    if (!Array.isArray(prices) || prices.length === 0) return null
+    const first = prices[0]
+    if (!first || typeof first !== 'object') return null
+    const p = first as Record<string, unknown>
+    const n = Number(p.price_per_day ?? p.pricePerDay ?? p.price ?? p.rate ?? p.amount)
+    return Number.isFinite(n) && n > 0 ? n : null
   }
 
   const walk = (node: unknown) => {
@@ -583,13 +766,27 @@ function parseDailyRates(raw: unknown): Map<string, number> {
     }
     if (typeof node !== 'object') return
     const obj = node as Record<string, unknown>
+
+    // Lodgify /v2/rates/calendar item shape:
+    // { date: "YYYY-MM-DD", prices: [{ price_per_day: 380 }] }
     const date = obj.date ?? obj.day ?? obj.start
-    const price = obj.price ?? obj.price_per_day ?? obj.rate ?? obj.amount
-    if (date != null && price != null) {
-      ingest(String(date), Number(price))
+    if (date != null && String(date).slice(0, 10) !== 'null') {
+      const nested = priceFromPricesArray(obj.prices)
+      const flat = Number(obj.price ?? obj.price_per_day ?? obj.rate ?? obj.amount)
+      const price = nested ?? (Number.isFinite(flat) && flat > 0 ? flat : null)
+      if (price != null) ingest(String(date), price)
     }
-    // Nested calendars
-    for (const key of ['calendar', 'days', 'rates', 'data', 'items', 'period_rates']) {
+
+    for (const key of [
+      'calendar_items',
+      'calendarItems',
+      'calendar',
+      'days',
+      'rates',
+      'data',
+      'items',
+      'period_rates',
+    ]) {
       if (obj[key]) walk(obj[key])
     }
   }
@@ -605,8 +802,8 @@ async function blockDates(roomTypeId: string, checkIn: Date, checkOut: Date): Pr
       const date = parseDate(dateStr)
       return prisma.availability.upsert({
         where: { roomTypeId_date: { roomTypeId, date } },
-        update: { available: 0 },
-        create: { roomTypeId, date, available: 0 },
+        update: { available: 0, blockReason: 'booking' },
+        create: { roomTypeId, date, available: 0, blockReason: 'booking' },
       })
     }),
   )
@@ -619,8 +816,8 @@ async function releaseDates(roomTypeId: string, checkIn: Date, checkOut: Date): 
       const date = parseDate(dateStr)
       return prisma.availability.upsert({
         where: { roomTypeId_date: { roomTypeId, date } },
-        update: { available: 1 },
-        create: { roomTypeId, date, available: 1 },
+        update: { available: 1, blockReason: null },
+        create: { roomTypeId, date, available: 1, blockReason: null },
       })
     }),
   )

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { Lock, Mail, User, Users } from 'lucide-react'
+import { Lock, Mail } from 'lucide-react'
 
 export default function LoginPage() {
   const { admin, loading, login } = useAuth()
@@ -16,28 +16,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
-
-  const demoCredentials = [
-    {
-      icon: User,
-      title: 'Admin',
-      subtitle: 'Full access to admin settings',
-      email: 'admin@serrano.hotel',
-      password: 'Admin@1234',
-    },
-    {
-      icon: Users,
-      title: 'Guest',
-      subtitle: 'Demo guest booking experience',
-      email: 'guest@serrano.hotel',
-      password: 'Guest@1234',
-    },
-  ]
-
-  function fillDemoCredentials(emailValue: string, passwordValue: string) {
-    setEmail(emailValue)
-    setPassword(passwordValue)
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -112,37 +90,6 @@ export default function LoginPage() {
               {submitLoading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
-
-          <div className="mt-6 rounded-2xl bg-[#f8f3ec] p-4">
-            <p className="mb-4 text-sm font-semibold text-[#5e544b]">Demo Credentials — Click to Fill</p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {demoCredentials.map((demo) => {
-                const Icon = demo.icon
-                return (
-                  <button
-                    key={demo.title}
-                    type="button"
-                    onClick={() => fillDemoCredentials(demo.email, demo.password)}
-                    className="group flex flex-col gap-2 rounded-2xl border border-[#d6d0c7] bg-white p-4 text-left transition hover:border-[#bca37f] hover:bg-[#fbf7ee]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fcf3e6] text-[#bca37f]">
-                        <Icon size={18} />
-                      </span>
-                      <div>
-                        <p className="font-semibold text-[#5e544b]">{demo.title}</p>
-                        <p className="text-xs text-[#8c8279]">{demo.subtitle}</p>
-                      </div>
-                    </div>
-                    <div className="mt-2 rounded-xl bg-[#faf7f2] px-3 py-2 text-sm text-[#5e544b]">
-                      <p className="font-medium">{demo.email}</p>
-                      <p className="text-xs text-[#8c8279]">{demo.password}</p>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
 
           <p className="mt-6 text-center text-xs text-[#8c8279]">
             Limiria Villa Management

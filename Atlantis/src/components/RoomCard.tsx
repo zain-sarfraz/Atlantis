@@ -103,7 +103,7 @@ export default function RoomCard({ category }: RoomCardProps) {
                     {rate.description}
                   </p>
                   <p className="type-price mt-2 text-2xl md:text-3xl">
-                    {formatMoney(rate.nightlyRate, state.currency)}
+                    {formatMoney(rate.nightlyRate, state.currency, false)}
                     <span className="ml-1.5 text-sm font-normal text-slate-500">
                       / night
                     </span>

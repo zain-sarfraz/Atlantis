@@ -159,7 +159,7 @@ export default function RateListView({ categories }: RateListViewProps) {
 
                     <div className="flex flex-col items-start sm:items-end sm:text-right">
                       <p className="type-price text-2xl md:text-3xl">
-                        {formatMoney(rate.nightlyRate, state.currency)}
+                        {formatMoney(rate.nightlyRate, state.currency, false)}
                       </p>
                       <p className="text-sm font-medium text-slate-600">
                         Per Night

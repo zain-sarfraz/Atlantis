@@ -4,9 +4,30 @@ import { runLodgifySync } from '../services/syncService'
 
 let started = false
 
+/** Max wall-clock time for one Lodgify sync run (1 minute). */
+const SYNC_TIMEOUT_MS = 60_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms / 1000}s`))
+    }, ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
+}
+
 /**
- * Sync Lodgify availability + channel bookings every 15 minutes.
- * Errors are logged; the process never exits because of sync failures.
+ * Sync Lodgify availability + channel bookings every 5 minutes.
+ * Each run is capped at 1 minute. Errors are logged; the process never exits.
  */
 export function startLodgifyCron(): void {
   if (started) return
@@ -17,12 +38,12 @@ export function startLodgifyCron(): void {
     return
   }
 
-  // Every 15 minutes
-  cron.schedule('*/15 * * * *', async () => {
+  // Every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
     const startedAt = new Date().toISOString()
     console.log(`[Lodgify cron] sync started at ${startedAt}`)
     try {
-      const result = await runLodgifySync()
+      const result = await withTimeout(runLodgifySync(), SYNC_TIMEOUT_MS, 'Lodgify sync')
       const ok = result.availability.ok && result.bookings.ok
       if (ok) {
         console.log(
@@ -41,5 +62,5 @@ export function startLodgifyCron(): void {
     }
   })
 
-  console.log('✓ Lodgify sync cron scheduled (every 15 minutes)')
+  console.log('✓ Lodgify sync cron scheduled (every 5 minutes, max 1 min per run)')
 }

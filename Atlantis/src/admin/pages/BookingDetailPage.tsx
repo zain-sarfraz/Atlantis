@@ -105,23 +105,23 @@ export default function BookingDetailPage() {
                   />
                 )}
                 <div className="flex-1">
-                  <p className="font-semibold text-slate-800">{item.roomType.name}</p>
-                  <p className="text-sm text-slate-500">{item.ratePlan.name.replace(/_/g, ' ')}</p>
+                  <p className="font-semibold text-slate-800">{item.roomType?.name || 'Limiria Villa Zanzibar'}</p>
+                  <p className="text-sm text-slate-500">{(item.ratePlan?.name || 'Best Available Rate').replace(/_/g, ' ')}</p>
                   <div className="mt-3 grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
                     <span className="text-slate-500">Nightly Rate</span>
-                    <span className="font-medium">AED {item.nightlyRate.toLocaleString()}</span>
+                    <span className="font-medium">AED {(item.nightlyRate ?? 0).toLocaleString()}</span>
                     <span className="text-slate-500">Nights</span>
-                    <span className="font-medium">{item.nights}</span>
+                    <span className="font-medium">{item.nights ?? 1}</span>
                     <span className="text-slate-500">Subtotal</span>
-                    <span className="font-medium">AED {item.subtotal.toLocaleString()}</span>
+                    <span className="font-medium">AED {(item.subtotal ?? item.total ?? 0).toLocaleString()}</span>
                     <span className="text-slate-500">Service Charge (10%)</span>
-                    <span className="font-medium">AED {item.serviceCharge.toLocaleString()}</span>
+                    <span className="font-medium">AED {(item.serviceCharge ?? 0).toLocaleString()}</span>
                     <span className="text-slate-500">Municipality Fee (7%)</span>
-                    <span className="font-medium">AED {item.municipalityFee.toLocaleString()}</span>
+                    <span className="font-medium">AED {(item.municipalityFee ?? 0).toLocaleString()}</span>
                     <span className="text-slate-500">VAT (5%)</span>
-                    <span className="font-medium">AED {item.vat.toLocaleString()}</span>
+                    <span className="font-medium">AED {(item.vat ?? 0).toLocaleString()}</span>
                     <span className="font-semibold text-slate-800">Total</span>
-                    <span className="font-bold text-slate-800">AED {item.total.toLocaleString()}</span>
+                    <span className="font-bold text-slate-800">AED {(item.total ?? 0).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -131,7 +131,7 @@ export default function BookingDetailPage() {
           <div className="mt-4 flex justify-between rounded-lg bg-[#5e544b]/5 px-5 py-4">
             <span className="font-semibold text-slate-800">Grand Total</span>
             <span className="text-xl font-bold text-[#5e544b]">
-              {booking.currency} {booking.totalAmount.toLocaleString()}
+              {booking.currency} {(booking.totalAmount ?? 0).toLocaleString()}
             </span>
           </div>
         </div>

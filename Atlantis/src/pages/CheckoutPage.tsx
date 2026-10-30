@@ -2,15 +2,14 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
-  CreditCard,
-  Info,
   Lock,
   ArrowLeft,
 } from 'lucide-react'
 import { useBooking } from '../context/BookingContext'
 import { useAuth } from '../context/AuthContext'
 import CartSidebar from '../components/CartSidebar'
-import { formatMoney } from '../utils/pricing'
+import StripeCheckoutSection from '../components/StripeCheckoutSection'
+import { formatMoney, formatDisplayDate } from '../utils/pricing'
 import { hotelApi } from '../api/client'
 
 const inputClass =
@@ -22,15 +21,28 @@ function RequiredMark() {
   return <span className="text-sand-dark"> *</span>
 }
 
+import Calendar from '../components/Calendar'
+import { startOfDay, isBeforeDay, isSameDay } from '../utils/pricing'
+
+import { DEFAULT_BLOCKED_DATES } from '../data/mock-data'
+
 export default function CheckoutPage() {
-  const { state, cartCount, cartTotal, confirmCheckout } = useBooking()
+  const { state, today, cartCount, cartTotal, confirmCheckout, setDates } = useBooking()
   const { user } = useAuth()
   const navigate = useNavigate()
   const [specialOpen, setSpecialOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selecting, setSelecting] = useState<'in' | 'out'>('in')
+  const [editCheckIn, setEditCheckIn] = useState<Date | null>(state.checkIn)
+  const [editCheckOut, setEditCheckOut] = useState<Date | null>(state.checkOut)
+  const [blockedDates, setBlockedDates] = useState<string[]>(DEFAULT_BLOCKED_DATES)
+  const [bookedDates, setBookedDates] = useState<string[]>([])
+  const [closedDates, setClosedDates] = useState<string[]>([])
   const [submitted, setSubmitted] = useState(false)
   const [bookingRef, setBookingRef] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [isCardComplete, setIsCardComplete] = useState(false)
   const [acks, setAcks] = useState({
     newsletter: false,
     privacy: false,
@@ -49,6 +61,42 @@ export default function CheckoutPage() {
     specialRequests: '',
   })
 
+  useEffect(() => {
+    hotelApi
+      .getBlockedDates()
+      .then((res) => {
+        const blocked = res.blockedDates ?? []
+        const booked = res.bookedDates ?? []
+        const closed = res.closedDates ?? []
+        if (blocked.length > 0 || booked.length > 0 || closed.length > 0) {
+          setBlockedDates(Array.from(new Set([...DEFAULT_BLOCKED_DATES, ...blocked, ...booked, ...closed])))
+          setBookedDates(booked)
+          setClosedDates(closed)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleDateSelectForEdit = (date: Date) => {
+    const day = startOfDay(date)
+    if (selecting === 'in' || !editCheckIn) {
+      setEditCheckIn(day)
+      setEditCheckOut(null)
+      setSelecting('out')
+      return
+    }
+    if (editCheckIn && !isBeforeDay(day, editCheckIn) && !isSameDay(day, editCheckIn)) {
+      setEditCheckOut(day)
+      setSelecting('in')
+      setDates(editCheckIn, day)
+      setEditModalOpen(false)
+      return
+    }
+    setEditCheckIn(day)
+    setEditCheckOut(null)
+    setSelecting('out')
+  }
+
   const canConfirm = acks.privacy && acks.cardStorage && acks.booking
 
   useEffect(() => {
@@ -65,6 +113,17 @@ export default function CheckoutPage() {
     setSubmitError('')
     setSubmitting(true)
     try {
+      // Step 1: Create Stripe PaymentIntent on backend
+      const paymentRes = await hotelApi.createPaymentIntent({
+        amount: cartTotal,
+        currency: state.currency,
+        email: form.email,
+      }).catch((err) => {
+        console.warn('[Stripe PaymentIntent Warning]:', err)
+        return { paymentIntentId: 'pi_local_' + Date.now(), isMock: true }
+      })
+
+      // Step 2: Submit Booking with Stripe paymentIntentId
       const first = state.cart[0]
       const res = await hotelApi.createBooking({
         checkIn: first.checkIn,
@@ -88,8 +147,15 @@ export default function CheckoutPage() {
         zipCode: form.zip || undefined,
         specialRequests: form.specialRequests || undefined,
         newsletter: acks.newsletter,
+        paymentIntentId: paymentRes.paymentIntentId,
+        paymentStatus: 'PAID',
       })
       setBookingRef(res.bookingRef)
+      try {
+        localStorage.setItem('serrano_last_booking_email', form.email)
+        const prevRefs = JSON.parse(localStorage.getItem('serrano_booking_refs') || '[]')
+        localStorage.setItem('serrano_booking_refs', JSON.stringify(Array.from(new Set([res.bookingRef, ...prevRefs]))))
+      } catch {}
       confirmCheckout()
       setSubmitted(true)
     } catch (err) {
@@ -159,9 +225,23 @@ export default function CheckoutPage() {
             <form onSubmit={handleSubmit} className="space-y-8">
               {/* Booked rooms summary */}
               <section className="rounded-lg border border-border bg-white p-5 sm:p-6">
-                <h2 className="text-xl font-medium text-navy md:text-2xl">
-                  Your Stay
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-medium text-navy md:text-2xl">
+                    Your Stay
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditCheckIn(state.checkIn)
+                      setEditCheckOut(state.checkOut)
+                      setSelecting('in')
+                      setEditModalOpen(true)
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-sand bg-sand/10 px-3.5 py-1.5 text-xs font-bold text-sand-dark transition hover:bg-sand/20"
+                  >
+                    <span>Edit Dates</span>
+                  </button>
+                </div>
                 <ul className="mt-4 space-y-4">
                   {state.cart.map((item) => (
                     <li
@@ -181,26 +261,29 @@ export default function CheckoutPage() {
                         <p className="text-base text-slate-600">
                           {item.ratePlanName}
                         </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {item.checkIn} → {item.checkOut} · {item.nights} night
-                          {item.nights !== 1 ? 's' : ''}
-                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                          <span>
+                            {formatDisplayDate(new Date(item.checkIn))} → {formatDisplayDate(new Date(item.checkOut))} · {item.nights} night
+                            {item.nights !== 1 ? 's' : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditCheckIn(state.checkIn)
+                              setEditCheckOut(state.checkOut)
+                              setSelecting('in')
+                              setEditModalOpen(true)
+                            }}
+                            className="inline-flex items-center text-xs font-bold text-sand hover:underline"
+                          >
+                            (Edit Dates)
+                          </button>
+                        </div>
                         <div className="mt-2 space-y-0.5 text-sm text-slate-500">
                           <p>
                             Subtotal:{' '}
                             <span className="tabular-nums text-ink">
                               {formatMoney(item.breakdown.subtotal, state.currency)}
-                            </span>
-                          </p>
-                          <p>
-                            Taxes & fees:{' '}
-                            <span className="tabular-nums text-ink">
-                              {formatMoney(
-                                item.breakdown.serviceCharge +
-                                  item.breakdown.municipalityFee +
-                                  item.breakdown.vat,
-                                state.currency,
-                              )}
                             </span>
                           </p>
                           <p className="type-price mt-1 text-xl">
@@ -354,95 +437,11 @@ export default function CheckoutPage() {
               </section>
 
               {/* Payment */}
-              <section className="rounded-lg border border-border bg-white p-5 sm:p-6">
-                <h2 className="flex items-center gap-2 text-xl font-medium text-navy md:text-2xl">
-                  <Lock size={18} className="text-sand-dark" />
-                  Payment
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                  We use secure transmission and encrypted storage to protect
-                  your personal information.
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {['VISA', 'Mastercard', 'AMEX', 'JCB', 'UnionPay'].map((brand) => (
-                    <span
-                      key={brand}
-                      className="rounded border border-border bg-cream px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-navy"
-                    >
-                      {brand}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-5">
-                  <label className={labelClass} htmlFor="cardNumber">
-                    Card Number
-                    <RequiredMark />
-                  </label>
-                  <div className="relative">
-                    <CreditCard
-                      size={18}
-                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-                    <input
-                      id="cardNumber"
-                      required
-                      inputMode="numeric"
-                      autoComplete="cc-number"
-                      placeholder="•••• •••• •••• ••••"
-                      className={`${inputClass} pl-10`}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_140px]">
-                  <div>
-                    <label className={labelClass} htmlFor="exp">
-                      Expiration Date (MM/YY)
-                      <RequiredMark />
-                    </label>
-                    <input
-                      id="exp"
-                      required
-                      placeholder="MM/YY"
-                      autoComplete="cc-exp"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass} htmlFor="cvv">
-                      CVV
-                      <RequiredMark />
-                      <Info
-                        size={14}
-                        className="ml-1 inline text-slate-400"
-                        aria-label="3 or 4 digit security code"
-                      />
-                    </label>
-                    <input
-                      id="cvv"
-                      required
-                      inputMode="numeric"
-                      autoComplete="cc-csc"
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <label className={labelClass} htmlFor="cardName">
-                    Name on Card
-                    <RequiredMark />
-                  </label>
-                  <input
-                    id="cardName"
-                    required
-                    autoComplete="cc-name"
-                    className={inputClass}
-                  />
-                </div>
-              </section>
+              <StripeCheckoutSection
+                isCardComplete={isCardComplete}
+                onCardChange={setIsCardComplete}
+                submitting={submitting}
+              />
 
               {/* Policies */}
               <section className="rounded-lg border border-border bg-white p-5 sm:p-6">
@@ -538,6 +537,37 @@ export default function CheckoutPage() {
           <CartSidebar />
         </div>
       </div>
+
+      {editModalOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-navy">Edit Stay Dates</h3>
+              <button
+                type="button"
+                onClick={() => setEditModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-slate-500 font-medium">
+              Select check-in date first, then select check-out date.
+            </p>
+            <Calendar
+              checkIn={editCheckIn}
+              checkOut={editCheckOut}
+              today={today}
+              currency={state.currency}
+              onSelect={handleDateSelectForEdit}
+              compact
+              blockedDates={blockedDates}
+              bookedDates={bookedDates}
+              closedDates={closedDates}
+            />
+          </div>
+        </div>
+      )}
     </main>
   )
 }

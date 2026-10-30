@@ -1,27 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Eye, EyeOff, LogIn, UserPlus, ShieldCheck, User } from 'lucide-react'
+import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import Logo from '../components/Logo'
 
 type Tab = 'login' | 'register'
-
-const DEMO_ACCOUNTS = [
-  {
-    label: 'Admin',
-    hint: 'Opens admin dashboard',
-    email: 'admin@serrano.hotel',
-    password: 'Admin@1234',
-    icon: ShieldCheck,
-  },
-  {
-    label: 'Guest',
-    hint: 'Customer booking account',
-    email: 'guest@serrano.hotel',
-    password: 'Guest@1234',
-    icon: User,
-  },
-] as const
 
 export default function LoginPage() {
   const { login, register } = useAuth()
@@ -38,14 +21,6 @@ export default function LoginPage() {
   const [showRegPw, setShowRegPw] = useState(false)
   const [regError, setRegError] = useState('')
   const [regLoading, setRegLoading] = useState(false)
-
-  const fillDemo = (email: string, password: string) => {
-    setTab('login')
-    setLoginEmail(email)
-    setLoginPassword(password)
-    setLoginError('')
-    setShowLoginPw(true)
-  }
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -91,11 +66,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setTab('login')}
-                className={`flex-1 py-3.5 text-sm font-medium transition-colors ${
-                  tab === 'login'
-                    ? 'border-b-2 border-sand text-navy bg-white'
-                    : 'text-taupe hover:text-ink hover:bg-cream'
-                }`}
+                className={`flex-1 py-3.5 text-sm font-medium transition-colors ${tab === 'login'
+                  ? 'border-b-2 border-sand text-navy bg-white'
+                  : 'text-taupe hover:text-ink hover:bg-cream'
+                  }`}
               >
                 <span className="flex items-center justify-center gap-1.5">
                   <LogIn size={15} />
@@ -105,11 +79,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setTab('register')}
-                className={`flex-1 py-3.5 text-sm font-medium transition-colors ${
-                  tab === 'register'
-                    ? 'border-b-2 border-sand text-navy bg-white'
-                    : 'text-taupe hover:text-ink hover:bg-cream'
-                }`}
+                className={`flex-1 py-3.5 text-sm font-medium transition-colors ${tab === 'register'
+                  ? 'border-b-2 border-sand text-navy bg-white'
+                  : 'text-taupe hover:text-ink hover:bg-cream'
+                  }`}
               >
                 <span className="flex items-center justify-center gap-1.5">
                   <UserPlus size={15} />
@@ -282,35 +255,6 @@ export default function LoginPage() {
                   </p>
                 </form>
               )}
-            </div>
-          </div>
-
-          {/* Demo credentials — click to fill */}
-          <div className="rounded-xl border border-border bg-white px-5 py-4 shadow-sm">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-taupe">
-              Demo credentials — click to fill
-            </p>
-            <div className="space-y-2">
-              {DEMO_ACCOUNTS.map((demo) => {
-                const Icon = demo.icon
-                return (
-                  <button
-                    key={demo.email}
-                    type="button"
-                    onClick={() => fillDemo(demo.email, demo.password)}
-                    className="flex w-full items-start gap-3 rounded-lg border border-border bg-cream px-3.5 py-3 text-left transition hover:border-sand hover:bg-sand/10"
-                  >
-                    <Icon size={18} className="mt-0.5 shrink-0 text-sand" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-ink">{demo.label}</p>
-                      <p className="text-xs text-taupe">{demo.hint}</p>
-                      <p className="mt-1 font-mono text-xs text-ink/80">
-                        {demo.email} · {demo.password}
-                      </p>
-                    </div>
-                  </button>
-                )
-              })}
             </div>
           </div>
 

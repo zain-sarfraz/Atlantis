@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../config/database'
 import { upsertDashboardBookingFromLodgify } from '../../services/lodgifyDashboardBooking.service'
 import { scopedLodgifyPropertyId } from '../../utils/lodgifyScope'
+import { env } from '../../config/env'
 
 type JsonObject = Record<string, unknown>
 
@@ -194,6 +195,17 @@ export async function receiveLodgifyWebhook(req: Request, res: Response, _next: 
       if (!looksLikeBookingEvent(event, parsed)) {
         console.warn(
           `[Lodgify webhook] event[${i}] skipped (non-booking) action=${parsed.action ?? 'unknown'}`,
+        )
+        continue
+      }
+
+      if (
+        env.lodgifyPropertyId != null &&
+        parsed.propertyId != null &&
+        parsed.propertyId !== env.lodgifyPropertyId
+      ) {
+        console.warn(
+          `[Lodgify webhook] event[${i}] skipped — propertyId ${parsed.propertyId} does not match configured property ${env.lodgifyPropertyId}`,
         )
         continue
       }

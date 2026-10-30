@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { User, LogOut, ChevronDown } from 'lucide-react'
+import { User, LogOut, ChevronDown, CalendarCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useBooking } from '../context/BookingContext'
 import { useAuth } from '../context/AuthContext'
@@ -7,7 +7,7 @@ import type { Currency } from '../types'
 import Logo from './Logo'
 import AlertsDropdown from './AlertsDropdown'
 
-const currencies: Currency[] = ['AED', 'USD', 'EUR', 'GBP']
+const currencies: Currency[] = ['USD', 'AED', 'EUR', 'GBP']
 
 export default function Navbar() {
   const { state, setCurrency } = useBooking()
@@ -40,23 +40,21 @@ export default function Navbar() {
     navigate('/')
   }
 
-  const scrollToSearch = () => {
-    document.getElementById('booking-search')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-
   return (
     <header className="sticky top-0 z-[100] border-b border-border/70 bg-cream/95 text-ink backdrop-blur-md">
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-10">
         <Logo />
 
         <div className="flex items-center gap-2.5 sm:gap-3">
-          <button
-            type="button"
-            onClick={scrollToSearch}
-            className="type-cta rounded bg-sand px-3.5 py-2.5 text-white transition hover:bg-sand-dark focus:ring-2 focus:ring-sand sm:px-5"
-          >
-            Book Your Stay
-          </button>
+          {isLoggedIn && (
+            <Link
+              to="/bookings"
+              className="flex items-center gap-1.5 rounded border border-border bg-white px-3 py-2 text-[0.8125rem] font-semibold tracking-tight text-navy transition hover:border-sand hover:bg-cream focus:ring-2 focus:ring-sand/30"
+            >
+              <CalendarCheck size={15} className="text-sand-dark" />
+              <span>My Bookings</span>
+            </Link>
+          )}
 
           <select
             value={state.currency}

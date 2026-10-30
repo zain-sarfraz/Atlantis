@@ -1,4 +1,6 @@
-﻿import type { RoomCategory } from '../types'
+import type { RoomCategory } from '../types'
+
+export const DEFAULT_BLOCKED_DATES: string[] = []
 
 const amenitiesBase = [
   'Walk-in rain shower',
@@ -36,9 +38,9 @@ const suitePerks = [
 ]
 
 export const FEE_RATES = {
-  serviceCharge: 0.1,
-  municipalityFee: 0.07,
-  vat: 0.05,
+  serviceCharge: 0,
+  municipalityFee: 0,
+  vat: 0,
 } as const
 
 export const CURRENCY_RATES: Record<string, number> = {

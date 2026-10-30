@@ -32,7 +32,7 @@ export default function CurrencyPage() {
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [msg, setMsg] = useState('')
-  const [sampleAed, setSampleAed] = useState(1100)
+  const [sampleAed, setSampleAed] = useState(1396)
 
   async function load() {
     const data = await currencyApi.list()

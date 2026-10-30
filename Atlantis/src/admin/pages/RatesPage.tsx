@@ -104,7 +104,7 @@ export default function RatesPage() {
   const [yearly, setYearly] = useState<number | null>(null)
   const [monthly, setMonthly] = useState<number | null>(null)
   const [fx, setFx] = useState<Record<string, number>>({ AED: 1 })
-  const [displayCurrency, setDisplayCurrency] = useState<CurrencyCode>('AED')
+  const [displayCurrency, setDisplayCurrency] = useState<CurrencyCode>('USD')
   const [yearlyInput, setYearlyInput] = useState('')
   const [monthInputs, setMonthInputs] = useState<Record<number, string>>({})
   const [rangeFrom, setRangeFrom] = useState<string | null>(null)

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `Booking` ADD COLUMN `stripePaymentIntentId` VARCHAR(255) NULL,
+    ADD COLUMN `paymentStatus` ENUM('UNPAID', 'PAID', 'REFUNDED', 'FAILED') NOT NULL DEFAULT 'UNPAID';

@@ -1,7 +1,9 @@
 import { BookingStatus } from '@prisma/client'
 import { prisma } from '../config/database'
+import { env } from '../config/env'
 import { normalizeLodgifyChannel } from '../utils/lodgifyChannels'
 import { generateBookingRef } from '../utils/pricing'
+import { isLodgifyBookingExcluded } from './lodgifyExclusion.service'
 
 /** Minimal fields needed from parseLodgifyEvent (avoids importing the controller). */
 export type LodgifyParsedForBooking = {
@@ -169,6 +171,23 @@ export async function upsertDashboardBookingFromLodgify(
   parsed: LodgifyParsedForBooking,
   event: unknown,
 ): Promise<{ id: string; created: boolean } | null> {
+  if (parsed.bookingId && (await isLodgifyBookingExcluded(parsed.bookingId))) {
+    console.warn(
+      `[Lodgify webhook] Skipping booking ${parsed.bookingId} — admin-deleted / excluded`,
+    )
+    return null
+  }
+
+  if (
+    env.lodgifyPropertyId != null &&
+    parsed.propertyId != null &&
+    parsed.propertyId !== env.lodgifyPropertyId
+  ) {
+    console.warn(
+      `[Lodgify webhook] Skipping booking ${parsed.bookingId} — propertyId ${parsed.propertyId} does not match configured property ${env.lodgifyPropertyId}`,
+    )
+    return null
+  }
   if (!parsed.bookingId) {
     console.warn('[Lodgify webhook] Skip dashboard Booking — missing lodgify booking id')
     return null
@@ -191,9 +210,9 @@ export async function upsertDashboardBookingFromLodgify(
   // Resolve RoomType by lodgifyRoomTypeId (+ optional property)
   let roomType:
     | {
-        id: string
-        ratePlans: { id: string; basePrice: number }[]
-      }
+      id: string
+      ratePlans: { id: string; basePrice: number }[]
+    }
     | null = null
 
   if (parsed.roomId != null) {
@@ -231,8 +250,8 @@ export async function upsertDashboardBookingFromLodgify(
     if (!roomType) {
       console.warn(
         `[Lodgify webhook] No RoomType mapped for lodgifyRoomTypeId=${parsed.roomId}` +
-          (parsed.propertyId != null ? ` propertyId=${parsed.propertyId}` : '') +
-          ' — Booking will be saved without BookingItem. Set RoomType.lodgifyRoomTypeId in admin.',
+        (parsed.propertyId != null ? ` propertyId=${parsed.propertyId}` : '') +
+        ' — Booking will be saved without BookingItem. Set RoomType.lodgifyRoomTypeId in admin.',
       )
     } else if (roomType.ratePlans.length === 0) {
       console.warn(
@@ -263,7 +282,7 @@ export async function upsertDashboardBookingFromLodgify(
     totalAmount: extras.totalAmount > 0 ? extras.totalAmount : itemTotal,
     currency: extras.currency,
     lodgifyBookingId: parsed.bookingId,
-    lodgifySource,    lodgifyRoomName,    specialRequests: `Synced from Lodgify (${lodgifySource}${lodgifyRoomName ? ` / ${lodgifyRoomName}` : ''})`,
+    lodgifySource, lodgifyRoomName, specialRequests: `Synced from Lodgify (${lodgifySource}${lodgifyRoomName ? ` / ${lodgifyRoomName}` : ''})`,
     confirmedAt: status === BookingStatus.CONFIRMED ? new Date() : null,
     cancelledAt: status === BookingStatus.CANCELLED ? new Date() : null,
   }
@@ -325,20 +344,20 @@ export async function upsertDashboardBookingFromLodgify(
         ...bookingData,
         ...(roomType && ratePlan
           ? {
-              items: {
-                create: {
-                  roomTypeId: roomType.id,
-                  ratePlanId: ratePlan.id,
-                  nightlyRate,
-                  nights,
-                  subtotal: nightlyRate * nights,
-                  serviceCharge: 0,
-                  municipalityFee: 0,
-                  vat: 0,
-                  total: itemTotal,
-                },
+            items: {
+              create: {
+                roomTypeId: roomType.id,
+                ratePlanId: ratePlan.id,
+                nightlyRate,
+                nights,
+                subtotal: nightlyRate * nights,
+                serviceCharge: 0,
+                municipalityFee: 0,
+                vat: 0,
+                total: itemTotal,
               },
-            }
+            },
+          }
           : {}),
       },
     })
@@ -348,7 +367,7 @@ export async function upsertDashboardBookingFromLodgify(
 
   console.log(
     `[Lodgify webhook] Booking ${result.created ? 'created' : 'upserted'} ` +
-      `id=${result.id} lodgifyBookingId=${parsed.bookingId} status=${status}`,
+    `id=${result.id} lodgifyBookingId=${parsed.bookingId} status=${status}`,
   )
 
   return result

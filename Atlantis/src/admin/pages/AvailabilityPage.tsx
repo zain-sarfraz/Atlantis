@@ -72,7 +72,7 @@ export default function AvailabilityPage() {
   }, [villa, currentDate])
 
   const availMap = useMemo(
-    () => new Map(calendar.map((d) => [d.date, d.available])),
+    () => new Map(calendar.map((d) => [d.date, d])),
     [calendar],
   )
 
@@ -81,13 +81,16 @@ export default function AvailabilityPage() {
 
   const stats = useMemo(() => {
     let open = 0
-    let blocked = 0
+    let booked = 0
+    let closed = 0
     for (const d of days) {
-      const a = availMap.get(toISO(d)) ?? 1
+      const row = availMap.get(toISO(d))
+      const a = row?.available ?? 1
       if (a > 0) open += 1
-      else blocked += 1
+      else if (row?.reason === 'booked' || row?.guestName) booked += 1
+      else closed += 1
     }
-    return { open, blocked }
+    return { open, booked, closed, blocked: booked + closed }
   }, [days, availMap])
 
   function inRange(date: string) {
@@ -119,6 +122,7 @@ export default function AvailabilityPage() {
         from,
         to: to ?? from,
         available,
+        ...(available === 0 ? { blockReason: 'booking' as const } : {}),
       })) as { updated: number }
       setMsg(
         `✓ ${res.updated} night(s) marked ${available === 1 ? 'available' : 'unavailable'}`,
@@ -141,7 +145,12 @@ export default function AvailabilityPage() {
     try {
       const from = toISO(days[0])
       const to = toISO(days[days.length - 1])
-      const res = (await availabilityApi.bulkSet(villa.id, { from, to, available })) as {
+      const res = (await availabilityApi.bulkSet(villa.id, {
+        from,
+        to,
+        available,
+        ...(available === 0 ? { blockReason: 'booking' as const } : {}),
+      })) as {
         updated: number
       }
       setMsg(
@@ -180,7 +189,7 @@ export default function AvailabilityPage() {
     <div>
       <PageHeader
         title="Villa Availability"
-        subtitle="Limiria Villa Zanzibar — green = bookable, red = blocked (Lodgify / manual)"
+        subtitle="Limiria Villa Zanzibar — green = bookable, red = booked (Lodgify / manual)"
         action={
           <button
             type="button"
@@ -222,9 +231,10 @@ export default function AvailabilityPage() {
                   {villa.lodgifyRoomTypeId != null ? ` · room ${villa.lodgifyRoomTypeId}` : ''}
                 </p>
               )}
-              <div className="mt-3 flex gap-4 text-sm">
+              <div className="mt-3 flex flex-wrap gap-4 text-sm">
                 <span className="text-emerald-700">{stats.open} open</span>
-                <span className="text-red-600">{stats.blocked} blocked</span>
+                <span className="text-red-600">{stats.booked} booked</span>
+                <span className="text-amber-700">{stats.closed} closed</span>
               </div>
             </div>
 
@@ -268,7 +278,7 @@ export default function AvailabilityPage() {
               ) : (
                 <div className="p-4">
                   <p className="mb-3 text-xs text-slate-500">
-                    Click a day, then another day to select a range. Use the panel to open or block.
+                    Click a day, then another day to select a range. Use the panel to open or book.
                   </p>
                   <div className="mb-2 grid grid-cols-7 gap-1">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
@@ -283,34 +293,51 @@ export default function AvailabilityPage() {
                     ))}
                     {days.map((d) => {
                       const dateStr = toISO(d)
-                      const avail = availMap.get(dateStr) ?? 1
+                      const row = availMap.get(dateStr)
+                      const avail = row?.available ?? 1
+                      const reason = row?.reason ?? (avail === 0 ? 'closed' : 'open')
                       const selected = inRange(dateStr)
                       const color =
-                        avail === 0
+                        reason === 'booked'
                           ? 'bg-red-100 text-red-700'
-                          : 'bg-green-100 text-green-700'
+                          : reason === 'closed'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-green-100 text-green-700'
+                      const label =
+                        reason === 'booked'
+                          ? row?.guestName?.split(' ')[0] || 'Booked'
+                          : reason === 'closed'
+                            ? 'Closed'
+                            : 'Open'
                       return (
                         <button
                           key={dateStr}
                           type="button"
                           onClick={() => onDayClick(dateStr)}
                           disabled={saving}
-                          className={`min-h-[64px] rounded-lg p-1.5 text-center transition hover:opacity-90 ${color} ${
+                          className={`min-h-[72px] rounded-lg p-1.5 text-center transition hover:opacity-90 ${color} ${
                             selected ? 'ring-2 ring-[#bca37f] ring-offset-1' : ''
                           }`}
-                          title={`${dateStr}: ${avail === 0 ? 'Unavailable' : 'Available'}`}
+                          title={
+                            reason === 'booked'
+                              ? `${dateStr}: ${row?.guestName ?? 'Booked'} (${row?.bookingRef ?? ''})`
+                              : `${dateStr}: ${reason === 'closed' ? 'Closed on Lodgify' : 'Available'}`
+                          }
                         >
                           <div className="text-xs font-medium">{d.getUTCDate()}</div>
-                          <div className="mt-1 text-[11px] font-bold">
-                            {avail === 0 ? 'Blocked' : 'Open'}
+                          <div className="mt-1 text-[10px] font-bold leading-tight line-clamp-2">
+                            {label}
                           </div>
                         </button>
                       )
                     })}
                   </div>
-                  <div className="mt-3 flex gap-4 text-xs text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
                     <span className="flex items-center gap-1">
-                      <span className="inline-block h-3 w-3 rounded bg-red-100" /> Unavailable
+                      <span className="inline-block h-3 w-3 rounded bg-red-100" /> Booked (Lodgify reservation)
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block h-3 w-3 rounded bg-amber-100" /> Closed (manual block)
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="inline-block h-3 w-3 rounded bg-green-100" /> Available
@@ -346,7 +373,7 @@ export default function AvailabilityPage() {
                   onClick={() => applyAvailability(0)}
                   className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:opacity-40"
                 >
-                  Mark unavailable
+                  Mark booked
                 </button>
                 <button
                   type="button"
@@ -382,7 +409,7 @@ export default function AvailabilityPage() {
                   onClick={() => applyWholeMonth(0)}
                   className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100 disabled:opacity-40"
                 >
-                  Block whole month
+                  Book whole month
                 </button>
               </div>
             </div>

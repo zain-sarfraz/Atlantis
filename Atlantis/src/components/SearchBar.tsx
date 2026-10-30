@@ -17,8 +17,14 @@ import {
   startOfDay,
 } from '../utils/pricing'
 import Calendar from './Calendar'
+import { hotelApi } from '../api/client'
+
+import { useNavigate } from 'react-router-dom'
+
+import { DEFAULT_BLOCKED_DATES } from '../data/mock-data'
 
 export default function SearchBar() {
+  const navigate = useNavigate()
   const {
     state,
     nights,
@@ -27,19 +33,40 @@ export default function SearchBar() {
     setGuests,
     setDates,
     setPromo,
-    applySearch,
-    resetSearch,
     fromTotal,
-    toggleCart,
   } = useBooking()
 
   const [guestsOpen, setGuestsOpen] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [promoOpen, setPromoOpen] = useState(false)
   const [selecting, setSelecting] = useState<'in' | 'out'>('in')
+  const [blockedDates, setBlockedDates] = useState<string[]>(DEFAULT_BLOCKED_DATES)
+  const [bookedDates, setBookedDates] = useState<string[]>([])
+  const [closedDates, setClosedDates] = useState<string[]>([])
   const guestsRef = useRef<HTMLDivElement>(null)
   const calendarRef = useRef<HTMLDivElement>(null)
   const promoRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    hotelApi
+      .getBlockedDates()
+      .then((res) => {
+        const blocked = res.blockedDates ?? []
+        const booked = res.bookedDates ?? []
+        const closed = res.closedDates ?? []
+        if (blocked.length > 0 || booked.length > 0 || closed.length > 0) {
+          setBlockedDates(Array.from(new Set([...DEFAULT_BLOCKED_DATES, ...blocked, ...booked, ...closed])))
+          setBookedDates(booked)
+          setClosedDates(closed)
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load blocked dates:', err)
+        setBlockedDates(DEFAULT_BLOCKED_DATES)
+        setBookedDates([])
+        setClosedDates([])
+      })
+  }, [])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -62,6 +89,8 @@ export default function SearchBar() {
 
   const handleDateSelect = (date: Date) => {
     const day = startOfDay(date)
+    const blockedSet = new Set(blockedDates)
+
     if (selecting === 'in' || !state.checkIn) {
       setDates(day, null)
       setSelecting('out')
@@ -72,8 +101,29 @@ export default function SearchBar() {
       !isBeforeDay(day, state.checkIn) &&
       !isSameDay(day, state.checkIn)
     ) {
+      // Ensure selected stay range does not overlap any blocked dates
+      let cur = new Date(state.checkIn)
+      cur.setDate(cur.getDate() + 1)
+      let spansBlocked = false
+      while (cur <= day) {
+        const yyyy = cur.getFullYear()
+        const mm = String(cur.getMonth() + 1).padStart(2, '0')
+        const dd = String(cur.getDate()).padStart(2, '0')
+        if (blockedSet.has(`${yyyy}-${mm}-${dd}`)) {
+          spansBlocked = true
+          break
+        }
+        cur.setDate(cur.getDate() + 1)
+      }
+      if (spansBlocked) {
+        setDates(day, null)
+        setSelecting('out')
+        return
+      }
+
       setDates(state.checkIn, day)
       setSelecting('in')
+      setCalendarOpen(false)
       return
     }
     setDates(day, null)
@@ -132,9 +182,8 @@ export default function SearchBar() {
                   setCalendarOpen(false)
                   setPromoOpen(false)
                 }}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${
-                  guestsOpen ? cellActive : cellIdle
-                }`}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${guestsOpen ? cellActive : cellIdle
+                  }`}
               >
                 <Users size={18} className="shrink-0 text-taupe" strokeWidth={1.5} />
                 <div className="min-w-0 flex-1">
@@ -216,9 +265,8 @@ export default function SearchBar() {
                     setPromoOpen(false)
                     setSelecting('in')
                   }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${
-                    calendarOpen && selecting === 'in' ? cellActive : cellIdle
-                  }`}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${calendarOpen && selecting === 'in' ? cellActive : cellIdle
+                    }`}
                 >
                   <CalendarIcon size={18} className="shrink-0 text-taupe" strokeWidth={1.5} />
                   <div className="min-w-0">
@@ -237,9 +285,8 @@ export default function SearchBar() {
                     setPromoOpen(false)
                     setSelecting(state.checkIn ? 'out' : 'in')
                   }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${
-                    calendarOpen && selecting === 'out' ? cellActive : cellIdle
-                  }`}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${calendarOpen && selecting === 'out' ? cellActive : cellIdle
+                    }`}
                 >
                   <CalendarIcon size={18} className="shrink-0 text-taupe" strokeWidth={1.5} />
                   <div className="min-w-0">
@@ -254,16 +301,9 @@ export default function SearchBar() {
               {calendarOpen && (
                 <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[60] rounded-lg border border-border bg-white p-4 shadow-xl">
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-navy">
+                    <p className="text-base font-semibold text-navy">
                       Select check-in & check-out
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setCalendarOpen(false)}
-                      className="type-cta shrink-0 rounded bg-sand px-4 py-1.5 text-white transition hover:bg-sand-dark"
-                    >
-                      Done
-                    </button>
                   </div>
                   <Calendar
                     checkIn={state.checkIn}
@@ -272,6 +312,9 @@ export default function SearchBar() {
                     currency={state.currency}
                     onSelect={handleDateSelect}
                     compact
+                    blockedDates={blockedDates}
+                    bookedDates={bookedDates}
+                    closedDates={closedDates}
                   />
                 </div>
               )}
@@ -285,9 +328,8 @@ export default function SearchBar() {
                   setGuestsOpen(false)
                   setCalendarOpen(false)
                 }}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${
-                  promoOpen ? cellActive : cellIdle
-                }`}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${promoOpen ? cellActive : cellIdle
+                  }`}
               >
                 <Tag size={18} className="shrink-0 text-taupe" strokeWidth={1.5} />
                 <div className="min-w-0 flex-1">
@@ -329,7 +371,7 @@ export default function SearchBar() {
                 <p className="text-sm text-navy sm:text-base">
                   From{' '}
                   <span className="type-price text-lg sm:text-xl">
-                    {formatMoney(fromPrice, state.currency)}
+                    {formatMoney(fromPrice, state.currency, false)}
                   </span>{' '}
                   <span className="text-taupe">
                     total for {nights} night{nights !== 1 ? 's' : ''}
@@ -340,7 +382,7 @@ export default function SearchBar() {
               )}
               <button
                 type="button"
-                onClick={() => toggleCart(true)}
+                onClick={() => navigate('/checkout')}
                 className="inline-flex items-center gap-1.5 text-sm text-taupe transition hover:text-sand"
               >
                 <ShoppingBag size={15} strokeWidth={1.5} />
@@ -349,29 +391,15 @@ export default function SearchBar() {
             </div>
 
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  applySearch()
-                  setCalendarOpen(false)
-                  setGuestsOpen(false)
-                  setPromoOpen(false)
-                }}
-                className="type-cta rounded bg-sand px-5 py-2.5 text-white transition hover:bg-sand-dark"
-              >
-                Search
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  resetSearch()
-                  setCalendarOpen(false)
-                  setSelecting('in')
-                }}
-                className="type-cta rounded border border-border bg-white px-5 py-2.5 text-navy transition hover:border-sand"
-              >
-                Cancel
-              </button>
+              {state.checkIn && state.checkOut && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/checkout')}
+                  className="type-cta rounded bg-sand px-6 py-2.5 text-white transition hover:bg-sand-dark focus:ring-2 focus:ring-sand font-bold text-sm shadow-sm uppercase tracking-wide"
+                >
+                  Check-Out
+                </button>
+              )}
             </div>
           </div>
         </div>

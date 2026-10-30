@@ -1,5 +1,6 @@
 import { AxiosError } from 'axios'
 import { isLodgifyConfigured, lodgifyClient, lodgifyV1Client } from '../config/lodgify'
+import { env } from '../config/env'
 
 export type LodgifyBookingPayload = {
   propertyId: number
@@ -200,8 +201,24 @@ export async function createBookingInLodgify(
 }
 
 /**
- * GET /v2/reservations/bookings — fetch bookings (optionally filtered by property).
- * Pages through results (max 50 per page).
+ * GET /v2/reservations/bookings/:id
+ */
+export async function getBookingById(bookingId: number | string): Promise<unknown> {
+  assertConfigured()
+  try {
+    const { data } = await lodgifyClient.get(`/reservations/bookings/${bookingId}`)
+    return data
+  } catch (err) {
+    rethrowLodgify(err, 'getBookingById')
+  }
+}
+
+/**
+ * GET /v2/reservations/bookings — pages through results (max 50/page).
+ *
+ * IMPORTANT: Lodgify's `propertyId` query param is unreliable (returns other
+ * properties' bookings). We always page the account list, then filter client-side
+ * by `property_id` so Limiria (714507) data stays correct.
  */
 export async function getBookings(
   propertyId?: number | string,
@@ -214,6 +231,8 @@ export async function getBookings(
 ): Promise<unknown[]> {
   assertConfigured()
 
+  // Default to env.lodgifyPropertyId if not explicitly passed
+  const targetPropertyId = propertyId ?? env.lodgifyPropertyId ?? undefined
   const size = Math.min(options?.size ?? 50, 50)
   let page = options?.page ?? 1
   const all: unknown[] = []
@@ -227,18 +246,37 @@ export async function getBookings(
           size,
           includeCount: true,
           stayFilter: options?.stayFilter ?? 'Upcoming',
-          ...(propertyId != null ? { propertyId } : {}),
           ...(options?.updatedSince ? { updatedSince: options.updatedSince } : {}),
         },
       })
       const items = normalizeBookingList(data)
-      return propertyId != null
-        ? items.filter((b) => bookingMatchesProperty(b, propertyId))
+      return targetPropertyId != null
+        ? items.filter((b) => bookingMatchesProperty(b, targetPropertyId))
         : items
     }
 
     // Otherwise page through bookings. If caller requests 'All', fetch every page for 'All'.
-      if (options?.stayFilter === 'All') {
+    if (options?.stayFilter === 'All') {
+      page = 1
+      for (;;) {
+        const { data } = await lodgifyClient.get('/reservations/bookings', {
+          params: {
+            page,
+            size,
+            includeCount: true,
+            stayFilter: 'All',
+            ...(options?.updatedSince ? { updatedSince: options.updatedSince } : {}),
+          },
+        })
+        const items = normalizeBookingList(data)
+        all.push(...items)
+        if (items.length < size) break
+        page += 1
+        if (page > 200) break // safety cap for large properties
+      }
+    } else {
+      // Default: Upcoming + Current
+      for (const stayFilter of ['Upcoming', 'Current'] as const) {
         page = 1
         for (;;) {
           const { data } = await lodgifyClient.get('/reservations/bookings', {
@@ -246,8 +284,7 @@ export async function getBookings(
               page,
               size,
               includeCount: true,
-              stayFilter: 'All',
-              ...(propertyId != null ? { propertyId } : {}),
+              stayFilter,
               ...(options?.updatedSince ? { updatedSince: options.updatedSince } : {}),
             },
           })
@@ -255,35 +292,14 @@ export async function getBookings(
           all.push(...items)
           if (items.length < size) break
           page += 1
-          if (page > 200) break // safety cap for large properties
-        }
-      } else {
-        // Default: Upcoming + Current (keeps previous behaviour)
-        for (const stayFilter of ['Upcoming', 'Current'] as const) {
-          page = 1
-          for (;;) {
-            const { data } = await lodgifyClient.get('/reservations/bookings', {
-              params: {
-                page,
-                size,
-                includeCount: true,
-                stayFilter,
-                ...(propertyId != null ? { propertyId } : {}),
-                ...(options?.updatedSince ? { updatedSince: options.updatedSince } : {}),
-              },
-            })
-            const items = normalizeBookingList(data)
-            all.push(...items)
-            if (items.length < size) break
-            page += 1
-            if (page > 40) break // safety cap
-          }
+          if (page > 40) break // safety cap
         }
       }
+    }
 
     const filtered =
-      propertyId != null
-        ? all.filter((b) => bookingMatchesProperty(b, propertyId))
+      targetPropertyId != null
+        ? all.filter((b) => bookingMatchesProperty(b, targetPropertyId))
         : all
 
     // Deduplicate by id across stay filters
@@ -299,6 +315,15 @@ export async function getBookings(
   }
 }
 
+/** Read currency code from a Lodgify booking payload (fallback USD for Limiria). */
+export function extractBookingCurrency(booking: unknown, fallback = 'USD'): string {
+  if (!booking || typeof booking !== 'object') return fallback
+  const b = booking as Record<string, unknown>
+  const raw = b.currency_code ?? b.currencyCode ?? b.currency
+  if (typeof raw === 'string' && raw.trim()) return raw.trim().toUpperCase().slice(0, 5)
+  return fallback
+}
+
 function normalizeBookingList(data: unknown): unknown[] {
   if (Array.isArray(data)) return data
   if (data && typeof data === 'object') {
@@ -312,9 +337,8 @@ function normalizeBookingList(data: unknown): unknown[] {
 
 function bookingMatchesProperty(booking: unknown, propertyId: number | string): boolean {
   if (!booking || typeof booking !== 'object') return false
-  const b = booking as Record<string, unknown>
-  const pid = b.property_id ?? b.propertyId ?? b.house_id ?? b.houseId
-  return String(pid) === String(propertyId)
+  const pid = extractBookingPropertyId(booking)
+  return pid != null && String(pid) === String(propertyId)
 }
 
 export function extractBookingId(booking: unknown): string | null {
@@ -353,7 +377,14 @@ export function extractBookingRoomTypeId(booking: unknown): number | null {
 export function extractBookingPropertyId(booking: unknown): number | null {
   if (!booking || typeof booking !== 'object') return null
   const b = booking as Record<string, unknown>
-  const pid = b.property_id ?? b.propertyId ?? b.house_id ?? b.houseId
+  const pid =
+    b.property_id ??
+    b.propertyId ??
+    b.house_id ??
+    b.houseId ??
+    (b.property as Record<string, unknown> | undefined)?.id ??
+    (b.room as Record<string, unknown> | undefined)?.property_id ??
+    (Array.isArray(b.rooms) && (b.rooms[0] as Record<string, unknown> | undefined)?.property_id)
   if (typeof pid === 'number') return pid
   if (typeof pid === 'string' && /^\d+$/.test(pid)) return parseInt(pid, 10)
   return null

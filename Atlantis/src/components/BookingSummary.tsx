@@ -94,22 +94,10 @@ export default function BookingSummary() {
               label={`Nightly rate × ${n}`}
               value={formatMoney(breakdown.subtotal, currency)}
             />
-            <Row
-              label="Service charge (10%)"
-              value={formatMoney(breakdown.serviceCharge, currency)}
-            />
-            <Row
-              label="Municipality / City fee (7%)"
-              value={formatMoney(breakdown.municipalityFee, currency)}
-            />
-            <Row
-              label="VAT (5%)"
-              value={formatMoney(breakdown.vat, currency)}
-            />
             <div className="flex justify-between border-t border-border pt-4">
               <span className="text-base font-semibold text-navy">Total</span>
               <span className="type-price text-2xl md:text-3xl">
-                {formatMoney(breakdown.total, currency)}
+                {formatMoney(breakdown.subtotal, currency)}
               </span>
             </div>
           </div>
@@ -118,22 +106,6 @@ export default function BookingSummary() {
             {state.cartError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{state.cartError}</p>
             )}
-            <div className="rounded-lg bg-cream p-4">
-              <h4 className="type-label text-navy">Cancellation Policy</h4>
-              <p className="mt-2 text-base leading-relaxed text-ink">
-                Free cancellation up to 48 hours before arrival. Cancellations
-                within 48 hours or no-shows will be charged the first night
-                including taxes and fees.
-              </p>
-            </div>
-            <div className="rounded-lg bg-cream p-4">
-              <h4 className="type-label text-navy">Guarantee Policy</h4>
-              <p className="mt-2 text-base leading-relaxed text-ink">
-                A valid credit card is required to guarantee your reservation.
-                Your card will not be charged until check-in unless otherwise
-                stated by the selected rate plan.
-              </p>
-            </div>
           </div>
         </div>
 

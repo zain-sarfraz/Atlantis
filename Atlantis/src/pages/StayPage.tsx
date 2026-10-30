@@ -88,10 +88,6 @@ export default function StayPage() {
     document.getElementById('booking-search')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const scrollToBook = () => {
-    document.getElementById('villa-booking')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-
   return (
     <div className="bg-cream">
       <div className="relative z-50 mx-auto max-w-[1400px] px-4 pt-5 sm:px-6 lg:px-10">
@@ -356,7 +352,7 @@ export default function StayPage() {
           </p>
           <button
             type="button"
-            onClick={scrollToBook}
+            onClick={scrollToSearch}
             className="type-cta mt-8 rounded bg-sand px-8 py-3.5 text-white transition hover:bg-sand-dark"
           >
             Book Your Stay

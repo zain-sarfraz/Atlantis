@@ -1,4 +1,4 @@
-import { Mail } from 'lucide-react'
+import { Mail, MapPin, Phone } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Logo from './Logo'
 import { VILLA_DISPLAY_NAME } from '../utils/villa'
@@ -17,6 +17,14 @@ function FacebookIcon({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
+  )
+}
+
+function TikTokIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 1 1-5.2-1.74 2.89 2.89 0 0 1 2.31-1.18V9.28a6.34 6.34 0 0 0-5.07 2.61 6.34 6.34 0 0 0 10.77 4.54V9.07a8.28 8.28 0 0 0 4.41 1.27V6.89a4.85 4.85 0 0 1-.01-.2z"/>
     </svg>
   )
 }
@@ -56,11 +64,24 @@ export default function Footer() {
         </div>
 
         <div>
-          <p className="type-eyebrow text-navy">Visit</p>
-          <ul className="mt-3.5 space-y-2.5 text-[0.875rem] font-medium text-slate-600">
-            <li>{VILLA_DISPLAY_NAME}</li>
-            <li>Zanzibar, Tanzania</li>
-            <li>Private villa · Exclusive use</li>
+          <p className="type-eyebrow text-navy">Contact</p>
+          <ul className="mt-3.5 space-y-3 text-[0.875rem] font-medium text-slate-600">
+            <li className="flex items-center gap-2.5">
+              <MapPin size={18} className="text-sand shrink-0" strokeWidth={1.5} />
+              <span>Nungwi, Zanzibar, Tanzania</span>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <Phone size={18} className="text-sand shrink-0" strokeWidth={1.5} />
+              <a href="tel:+255777123456" className="transition hover:text-sand">
+                +255 777 123 456
+              </a>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <Mail size={18} className="text-sand shrink-0" strokeWidth={1.5} />
+              <a href="mailto:info@limiriavillazanzibar.com" className="transition hover:text-sand">
+                info@limiriavillazanzibar.com
+              </a>
+            </li>
           </ul>
         </div>
 
@@ -68,7 +89,7 @@ export default function Footer() {
           <p className="type-eyebrow text-navy">Connect</p>
           <div className="mt-4 flex items-center gap-3">
             <a
-              href="https://instagram.com"
+              href="https://www.instagram.com/limiriavillazanzibar/"
               target="_blank"
               rel="noreferrer"
               className="rounded p-2 text-sand transition hover:bg-cream-dark hover:text-sand-dark"
@@ -77,7 +98,7 @@ export default function Footer() {
               <InstagramIcon />
             </a>
             <a
-              href="https://facebook.com"
+              href="https://www.facebook.com/p/Limiria-Villa-Zanzibar-61581769498415/"
               target="_blank"
               rel="noreferrer"
               className="rounded p-2 text-sand transition hover:bg-cream-dark hover:text-sand-dark"
@@ -86,7 +107,16 @@ export default function Footer() {
               <FacebookIcon />
             </a>
             <a
-              href="mailto:stay@limiriavilla.com"
+              href="https://www.tiktok.com/@limiriavillazanzibar"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded p-2 text-sand transition hover:bg-cream-dark hover:text-sand-dark"
+              aria-label="TikTok"
+            >
+              <TikTokIcon />
+            </a>
+            <a
+              href="mailto:info@limiriavillazanzibar.com"
               className="rounded p-2 text-sand transition hover:bg-cream-dark hover:text-sand-dark"
               aria-label="Email"
             >
