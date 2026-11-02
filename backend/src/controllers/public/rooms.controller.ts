@@ -75,6 +75,7 @@ function toDateKey(value: Date): string {
 export async function getBlockedDates(req: Request, res: Response) {
   const bookedSet = new Set<string>()
   const closedSet = new Set<string>()
+  const openSet = new Set<string>()
 
   try {
     const villaFilter =
@@ -88,6 +89,26 @@ export async function getBlockedDates(req: Request, res: Response) {
     })
     const villaIds = villas.map((v) => v.id)
 
+    // Availability table is source of truth (same as admin calendar) for ALL months.
+    const availabilityRecords = await prisma.availability.findMany({
+      where: villaIds.length ? { roomTypeId: { in: villaIds } } : {},
+      select: { date: true, available: true, blockReason: true },
+    })
+
+    for (const r of availabilityRecords) {
+      const key = toDateKey(new Date(r.date))
+      if (r.available > 0) {
+        openSet.add(key)
+      } else if (r.blockReason === 'booking') {
+        bookedSet.add(key)
+      } else {
+        // blockReason === 'closed' OR null/unknown unavailable → Closed
+        closedSet.add(key)
+      }
+    }
+
+    // Booking rows only fill gaps (nights with no availability row yet).
+    // Never override Lodgify open/closed labels.
     const dbBookings = await prisma.booking.findMany({
       where: {
         status: { in: ['CONFIRMED', 'PENDING', 'CHECKED_IN'] },
@@ -107,29 +128,11 @@ export async function getBlockedDates(req: Request, res: Response) {
       const cur = new Date(b.checkIn)
       const end = new Date(b.checkOut)
       while (cur < end) {
-        bookedSet.add(toDateKey(cur))
+        const key = toDateKey(cur)
+        if (!openSet.has(key) && !closedSet.has(key)) {
+          bookedSet.add(key)
+        }
         cur.setUTCDate(cur.getUTCDate() + 1)
-      }
-    }
-
-    const availabilityRecords = await prisma.availability.findMany({
-      where: {
-        available: { lte: 0 },
-        ...(villaIds.length ? { roomTypeId: { in: villaIds } } : {}),
-      },
-      select: { date: true, blockReason: true },
-    })
-
-    for (const r of availabilityRecords) {
-      const key = toDateKey(new Date(r.date))
-      // Match admin calendar: Lodgify blockReason is source of truth for the label.
-      // Do NOT let a Booking-table overlap re-label an explicit "closed" night as "booked".
-      if (r.blockReason === 'closed') {
-        closedSet.add(key)
-      } else if (r.blockReason === 'booking' || bookedSet.has(key)) {
-        bookedSet.add(key)
-      } else {
-        closedSet.add(key)
       }
     }
   } catch {
@@ -146,7 +149,11 @@ export async function getBlockedDates(req: Request, res: Response) {
     }
   }
 
-  // Explicit closed (Lodgify / manual) wins over booking-table date overlap for the label
+  // Final priority: open > closed > booked (aligns with admin)
+  for (const key of openSet) {
+    bookedSet.delete(key)
+    closedSet.delete(key)
+  }
   for (const key of closedSet) bookedSet.delete(key)
 
   const blockedDates = Array.from(new Set([...bookedSet, ...closedSet])).sort()

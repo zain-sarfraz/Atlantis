@@ -137,10 +137,12 @@ export async function getAvailabilityCalendar(req: Request, res: Response, next:
       const syncedAsBooking = manual?.blockReason === 'booking'
 
       // Lodgify availability is source of truth (matches Lodgify calendar).
-      // Guest name only labels nights Lodgify already marks unavailable.
+      // Explicit closed must not be re-labeled Booked just because a Booking row overlaps.
       let reason: 'open' | 'booked' | 'closed' = 'open'
       if (available > 0) {
         reason = 'open'
+      } else if (manual?.blockReason === 'closed') {
+        reason = 'closed'
       } else if (guest || syncedAsBooking) {
         reason = 'booked'
       } else {

@@ -111,8 +111,9 @@ function MonthGrid({
           const dateStr = `${yyyy}-${mm}-${dd}`
 
           const past = isBeforeDay(date, todayStart)
-          const isBooked = bookedSet.has(dateStr)
-          const isClosed = !isBooked && closedSet.has(dateStr)
+          // Closed label wins over Booked if both ever appear (matches admin / Lodgify)
+          const isClosed = closedSet.has(dateStr)
+          const isBooked = !isClosed && bookedSet.has(dateStr)
           const isBlocked = blockedSet.has(dateStr)
           const selectedStart = checkIn && isSameDay(date, checkIn)
           const selectedEnd = checkOut && isSameDay(date, checkOut)
