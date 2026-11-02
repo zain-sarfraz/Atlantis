@@ -122,10 +122,13 @@ export async function getBlockedDates(req: Request, res: Response) {
 
     for (const r of availabilityRecords) {
       const key = toDateKey(new Date(r.date))
-      if (r.blockReason === 'booking' || bookedSet.has(key)) {
+      // Match admin calendar: Lodgify blockReason is source of truth for the label.
+      // Do NOT let a Booking-table overlap re-label an explicit "closed" night as "booked".
+      if (r.blockReason === 'closed') {
+        closedSet.add(key)
+      } else if (r.blockReason === 'booking' || bookedSet.has(key)) {
         bookedSet.add(key)
       } else {
-        // Manual / Lodgify closed periods — must block public booking calendar too
         closedSet.add(key)
       }
     }
@@ -143,8 +146,8 @@ export async function getBlockedDates(req: Request, res: Response) {
     }
   }
 
-  // Booked wins if a date appears in both
-  for (const key of bookedSet) closedSet.delete(key)
+  // Explicit closed (Lodgify / manual) wins over booking-table date overlap for the label
+  for (const key of closedSet) bookedSet.delete(key)
 
   const blockedDates = Array.from(new Set([...bookedSet, ...closedSet])).sort()
 
